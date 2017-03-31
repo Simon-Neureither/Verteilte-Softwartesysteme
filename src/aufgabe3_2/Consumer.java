@@ -1,18 +1,18 @@
-package aufgabe3;
+package aufgabe3_2;
 
-public class Producer implements Runnable {
+public class Consumer implements Runnable {
 	
 	private final BlockingQueue queue;
 	
-	public Producer(final BlockingQueue queue){
+	public Consumer(final BlockingQueue queue){
 		this.queue = queue;
 	}
 
 	@Override
 	public void run() {
-		System.out.println("Producer started");
+		System.out.println("Consumer started");
 		while(!Thread.currentThread().isInterrupted()){
-			queue.push((int)(Math.random()*10));
+			queue.pop();
 			try {
 				Thread.sleep((int)(Math.random()*2000));
 			} catch (InterruptedException e) {

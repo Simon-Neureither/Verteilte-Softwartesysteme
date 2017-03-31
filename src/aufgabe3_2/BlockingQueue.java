@@ -1,4 +1,4 @@
-package aufgabe3;
+package aufgabe3_2;
 
 import java.util.LinkedList;
 import java.util.List;
