@@ -12,8 +12,6 @@
 
 package aufgabe3_3;
 
-import aufgabe3_3.worker.Worker;
-
 /**
  * @author Robin Wismeth, robinwismeth@gmail.com
  * @version 3/31/17
@@ -21,7 +19,7 @@ import aufgabe3_3.worker.Worker;
 public class Main{
 
 	public static void main(String... args) throws InterruptedException{
-		int workerCount = 4;
+		int workerCount = 6;
 		int slots = 4;
 
 		if(args.length == 2){
@@ -29,12 +27,14 @@ public class Main{
 			slots = Integer.valueOf(args[1]);
 		}
 
-		final LockManager lockManager = new LockManager(slots);
-		final Thread[] workers = new Thread[workerCount];
-		final long startTime = System.currentTimeMillis();
+		TimeStampPrinter.print(String.format("Starting with %d slots for %d workers...%n", slots, workerCount));
 
+		final Thread[] workers = new Thread[workerCount];
+		final Distributor distributor = new Distributor(slots);
+
+		final long startTime = System.currentTimeMillis();
 		for(int index = 0; index < workerCount; index++){
-			workers[index] = Worker.create(lockManager);
+			workers[index] = new Worker(distributor);
 			workers[index].start();
 		}
 
