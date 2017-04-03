@@ -22,11 +22,15 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class Worker extends Thread{
 
-	private static final ReentrantLock OPT_IN_ACCESS = new ReentrantLock(true);
+	private static final ReentrantLock ACTIVE_STATE_CHANGE = new ReentrantLock(true);
 
-	private static final int CYCLES = 3;
+	private final int cycles;
+	
+	private final long thinkTime;
+	
+	private final long eatTime;
 
-	private final Semaphore optOutAccess = new Semaphore(0);
+	private final Semaphore passiveStateChange = new Semaphore(0);
 
 	private final Distributor distributor;
 
@@ -34,23 +38,26 @@ public class Worker extends Thread{
 
 	private State state = State.IN_QUEUE;
 
-	public Worker(final Distributor distributor){
+	public Worker(final int thinkTime, final int eatTime, final int cycles, final Distributor distributor){
+		this.thinkTime = thinkTime;
+		this.eatTime = eatTime;
 		this.distributor = distributor;
+		this.cycles = cycles;
 	}
 
 	private static void takeForks(final int index, final Distributor distributor) throws InterruptedException{
 		final Worker worker;
 
 		try{
-			OPT_IN_ACCESS.lock();
+			ACTIVE_STATE_CHANGE.lock();
 			worker = distributor.get(index).get();
 			worker.state = State.HUNGRY;
 			test(index, distributor);
 		}finally{
-			OPT_IN_ACCESS.unlock();
+			ACTIVE_STATE_CHANGE.unlock();
 		}
 
-		worker.optOutAccess.acquire();
+		worker.passiveStateChange.acquire();
 	}
 
 	private static void test(final int index, final Distributor distributor){
@@ -63,35 +70,35 @@ public class Worker extends Thread{
 				(!right.isPresent() || right.get().state != State.EATING)){
 
 			worker.get().state = State.EATING;
-			worker.get().optOutAccess.release();
+			worker.get().passiveStateChange.release();
 		}
 	}
 
 	private static void putForks(final int index, final Distributor distributor) throws InterruptedException{
 		try{
-			OPT_IN_ACCESS.lock();
+			ACTIVE_STATE_CHANGE.lock();
 			distributor.get(index).get().state = State.IN_QUEUE;
 			test(index-1, distributor);
 			test(index+1, distributor);
 		}finally{
-			OPT_IN_ACCESS.unlock();
+			ACTIVE_STATE_CHANGE.unlock();
 		}
 	}
 
 	@Override
 	public void run(){
-		while(counter++ < CYCLES){
+		while(counter++ < cycles){
 			try{
 
 				TimeStampPrinter.print(String.format("#%d (Thinking)%n", getId()));
-				Thread.sleep(1000); // Thinking
+				Thread.sleep(thinkTime); // Thinking
 
 				final int index = distributor.acquireSlot(this); // Wait for slot
 
 				takeForks(index, distributor); // Wait for Forks
 				TimeStampPrinter.print(String.format("\t#%d[%d] (take)%n", getId(), index));
 
-				Thread.sleep(1000); // Eating
+				Thread.sleep(eatTime); // Eating
 
 				TimeStampPrinter.print(String.format("#%d (Eating) {no. %d}%n", getId(), counter));
 				putForks(index, distributor); // Put down forks
@@ -105,7 +112,6 @@ public class Worker extends Thread{
 			}
 		}
 	}
-
 
 	private enum State{
 		IN_QUEUE, HUNGRY, EATING;

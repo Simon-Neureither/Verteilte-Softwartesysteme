@@ -34,7 +34,7 @@ public class Main{
 
 		final long startTime = System.currentTimeMillis();
 		for(int index = 0; index < workerCount; index++){
-			workers[index] = new Worker(distributor);
+			workers[index] = new Worker(1000, 1000, 3, distributor);
 			workers[index].start();
 		}
 

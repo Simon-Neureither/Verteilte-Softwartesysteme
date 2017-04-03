@@ -54,7 +54,7 @@ public class Distributor{
 	}
 
 	public Optional<Worker> get(final int index){
-		final Queue<Worker> selected = queues.get(((index % queues.size())+queues.size())%queues.size());// why!? :(
+		final Queue<Worker> selected = queues.get(((index % queues.size())+queues.size())%queues.size());
 		final Optional<Worker> result;
 
 		synchronized(selected){
