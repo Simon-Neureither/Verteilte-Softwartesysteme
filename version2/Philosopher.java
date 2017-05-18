@@ -5,7 +5,7 @@ import java.util.Date;
 
 public class Philosopher extends Thread {
 
-	
+	boolean m_done = false;
 	Table m_table;
 	
 	public Philosopher(Table t)
@@ -23,14 +23,11 @@ public class Philosopher extends Thread {
 	
 	void meditate(int ms)
 	{
-		//	System.out.println(time() + " "  + Thread.currentThread().getId() + " meditate.");
 		try {
 			Thread.sleep(ms);
 		} catch (InterruptedException e) {
-			this.interrupt();
+			m_done = true;
 		}
-	//	System.out.println(time() + " " + Thread.currentThread().getId() + " meditate finished.");
-
 	}
 	
 	
@@ -59,18 +56,14 @@ public class Philosopher extends Thread {
 			{
 				synchronized (s.getFork2())
 				{
-					
 					s.eat(this);
-					
 					waitTime = System.currentTimeMillis() - waitTime;
-			//		System.out.println(time() + " " + Thread.currentThread().getId() + String.format(" eating i waited: %d ms.", waitTime));
 					m_overallWaitingTime += waitTime;
 					try {
 						Thread.sleep(ms);
 					} catch (InterruptedException e) {
-						this.interrupt();
+						m_done = true;
 					}
-				//	System.out.println(time() + " " + Thread.currentThread().getId() + String.format(" stopped eating."));
 				}
 			}
 		} finally
@@ -86,15 +79,11 @@ public class Philosopher extends Thread {
 	
 	void sleep(int ms)
 	{
-		//System.out.println(time() + " " + Thread.currentThread().getId() + " sleeping.");
 		try {
 			Thread.sleep(ms);
 		} catch (InterruptedException e) {
-			this.interrupt();
+			m_done = true;
 		}
-		
-		//System.out.println(time() + " " + Thread.currentThread().getId() + " wake up.");
-
 	}
 	protected int eatCount = 0;
 	
@@ -105,30 +94,23 @@ public class Philosopher extends Thread {
 		int meditationTime = 5;
 		int eatTime = 1;
 		
-		
-		
-		while (true)
+		while (!m_done)
 		{
-			
 			meditate(meditationTime);
-			if (isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (isInterrupted()) break;
+			if (m_done) break;
 			meditate(meditationTime);
-			if (isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (isInterrupted()) break;
+			if (m_done) break;
 			meditate(meditationTime);
-			if (isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (isInterrupted()) break;
+			if (m_done) break;
 			sleep(sleepTime);
-			if (isInterrupted()) break;
-
 		}
-		
 		System.err.println(time() + " " + Thread.currentThread().getId() + String.format(" overall waiting time: %d, i ate %d times", m_overallWaitingTime, eatCount));
-
 	}
 
 	public int getEaten() {

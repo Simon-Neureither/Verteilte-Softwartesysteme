@@ -12,28 +12,27 @@ public class HungryPhilosopher extends Philosopher {
 		int meditationTime = 5;
 		int eatTime = 1;
 		
+		int meditationTimeMinusEat = Math.max(0, meditationTime - eatTime);
 		
-		while (true)
+		while (!m_done)
 		{
-			
-			meditate(meditationTime - eatTime);
-			if (this.isInterrupted()) break;
+			meditate(meditationTimeMinusEat);
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (this.isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (this.isInterrupted()) break;
+			if (m_done) break;
 			meditate(meditationTime);
-			if (this.isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (this.isInterrupted()) break;
-			meditate(meditationTime - eatTime);
-			if (this.isInterrupted()) break;
+			if (m_done) break;
+			meditate(meditationTimeMinusEat);
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (this.isInterrupted()) break;
+			if (m_done) break;
 			if (eat(eatTime)) eatCount++;
-			if (this.isInterrupted()) break;
+			if (m_done) break;
 			sleep(sleepTime);
-			if (this.isInterrupted()) break;
 		}
 		
 		System.err.println(time() + " " + Thread.currentThread().getId() + " VIELFRASSE "+ String.format(" overall waiting time: %d, i ate %d times", m_overallWaitingTime, eatCount));
