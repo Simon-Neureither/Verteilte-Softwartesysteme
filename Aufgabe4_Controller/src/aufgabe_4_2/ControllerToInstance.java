@@ -1,8 +1,9 @@
 package aufgabe_4_2;
 
+import java.io.Serializable;
 import java.rmi.Remote;
 
-public interface ControllerToInstance extends Remote {
+public interface ControllerToInstance extends Remote, Serializable {
 	
 	
 	// Controller to Instance

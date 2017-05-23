@@ -1,19 +1,24 @@
 package aufgabe_4_2;
 
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 
-public class Instance implements InstanceHandle {
+public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	private String controllerAddress;
 	private Registry registry;
 	
-	private Instance(String controllerAddress) throws RemoteException
+	private InstanceToController controller;
+	
+	private Instance(String controllerAddress) throws RemoteException, NotBoundException
 	{
 		this.controllerAddress = controllerAddress;
 		registry = LocateRegistry.getRegistry(controllerAddress);
-		registry.list(); // TODO
+		controller = (InstanceToController) registry.lookup("controller");
+		controller.addInstance(this);
 	}
 	
 	public static void main(String...args)
@@ -27,6 +32,9 @@ public class Instance implements InstanceHandle {
 		try {
 			new Instance(args[0]);
 		} catch (RemoteException e) {
+			e.printStackTrace();
+		} catch (NotBoundException e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
