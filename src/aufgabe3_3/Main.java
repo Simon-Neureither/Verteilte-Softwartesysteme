@@ -1,34 +1,44 @@
 package aufgabe3_3;
 
-public class Main{
+public class Main {
 
-	public static void main(String... args) throws InterruptedException{
-		int num_philosophers = 6;
+	public static void main(String...args) throws InterruptedException
+	{
+		int philosophers = 6;
 		int seats = 6;
-
-		Philosopher[] philosophers = new Philosopher[num_philosophers];
-		HungryPhilosopher[] hungryPhilosophers = new HungryPhilosopher[num_philosophers];
-
+		int hungry = 6;
+		
+		if (args.length == 3)
+		{
+			philosophers = Integer.valueOf(args[0]);
+			hungry = Integer.valueOf(args[1]);
+			seats = Integer.valueOf(args[2]);
+		}
+		
+		Philosopher[] phils = new Philosopher[philosophers];
+		HungryPhilosopher[] hungryPhilosophers = new HungryPhilosopher[hungry];
+		
 		Table table = new Table(seats);
-
-		for(int i = 0; i < num_philosophers; i++){
-			philosophers[i] = new Philosopher(table);
-			philosophers[i].start();
-
+		
+		for (int i = 0; i < philosophers; i++)
+		{
+			phils[i] = new Philosopher(table);
+			phils[i].start();
+		}
+		
+		for (int i = 0; i < hungry; i++)
+		{
 			hungryPhilosophers[i] = new HungryPhilosopher(table);
 			hungryPhilosophers[i].start();
 		}
-
-		Thread.sleep(5000);
-
-		for(int i = 0; i < num_philosophers; i++){
-			philosophers[i].interrupt();
+		
+		Thread.sleep(60000);
+		
+		for (int i = 0; i < philosophers; i++)
+		{
+			phils[i].interrupt();
 			hungryPhilosophers[i].interrupt();
 		}
-
-		for(int i = 0; i < table.m_seats.length; i++){
-			System.out.println(table.m_seats[i]);
-		}
 	}
-
+	
 }

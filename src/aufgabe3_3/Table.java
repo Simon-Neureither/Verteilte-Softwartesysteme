@@ -4,145 +4,138 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
-public class Table{
+public class Table {
 
 	Seat[] m_seats;
 
-	Semaphore m_availableSeats;
+	public Table(int seats) {
 
-	public Table(int seats){
 		m_seats = new Seat[seats];
-		m_availableSeats = new Semaphore(seats, true);
 
-		Fork startFork = new Fork();
-		Fork currentFork = new Fork();
-		for(int i = 0; i < seats; i++){
-			if(i == 0){
+		Object startFork = new Object();
+		Object currentFork = new Object();
+		for (int i = 0; i < seats; i++) {
+			if (i == 0) {
 				m_seats[i] = new Seat(startFork, currentFork);
-			}else if(i + 1 == seats){
+			} else if (i + 1 == seats) {
 				m_seats[i] = new Seat(startFork, currentFork);
-			}else if(i % 2 == 0){
-				m_seats[i] = new Seat(currentFork, (currentFork = new Fork()));
-			}else{
-				Fork f = new Fork();
+			} else if (i % 2 == 0) {
+				m_seats[i] = new Seat(currentFork, (currentFork = new Object()));
+			} else {
+				Object f = new Object();
 				m_seats[i] = new Seat(f, currentFork);
 				currentFork = f;
 			}
 		}
 	}
 
-	private int getSeatMod(int index){
-		while(index < 0){
+	private int getSeatMod(int index) {
+		while (index < 0) {
 			index = m_seats.length - index;
 		}
 		return index % m_seats.length;
 	}
+	
+	public int m_globalMinimum = 0;
+	public Philosopher m_globalMinimumPhilosph = null;
 
-	public Seat getSeat(){
-		//if (true)
-		//return m_seats[(int)(Math.random() * m_seats.length)];
+	public Seat getSeat(Philosopher philosopher) {
+
+
+		List<Seat> bestSeats = new ArrayList<Seat>();
+		List<Seat> freeSeat = new ArrayList<Seat>();
+
+		boolean isFree;
+		for (int i = 0; i < m_seats.length; i++)
 		{
-			int start = 0;
-			int end = 0;
+			isFree = m_seats[getSeatMod(i)].getSemaphore().availablePermits() == 1;
 
-			int goodSeats[] = new int[m_seats.length];
-			int size = 0;
-			int reversedSize = m_seats.length - 1;
-
-			boolean isFree;
-
-			for(int i = 0; i < m_seats.length; i++){
-				isFree = m_seats[getSeatMod(i)].getSemaphore().availablePermits() == 1;
-
-				if(isFree){
-					if(end != i - 1){
-						start = i;
-					}
-					end = i;
-
-					if(end - start >= 3){
-						goodSeats[size++] = i - 1;
-					}else{
-						goodSeats[reversedSize--] = i;
-					}
+			if (isFree)
+			{
+				freeSeat.add(m_seats[i]);
+				if (m_seats[getSeatMod(i - 1)].getSemaphore().availablePermits() == 1
+						&& m_seats[getSeatMod(i + 1)].getSemaphore().availablePermits() == 1) {
+					bestSeats.add(m_seats[i]);
 				}
-			}
-
-			if(size > 0){
-				return m_seats[goodSeats[(int) (Math.random() * size)]];
-			}else if(reversedSize != m_seats.length - 1){
-				return m_seats[goodSeats[(int) (Math.random() * (m_seats.length - reversedSize) + reversedSize)]];
-			}else{
-				// TODO Seat mit wenigster queue.
-				if(true)
-					return m_seats[(int) (Math.random() * m_seats.length)];
 			}
 		}
+
+		Seat toReturn;
+
+		if (bestSeats.size() > 0)
 		{
-			List<Seat> bestSeats = new ArrayList<Seat>();
-			List<Seat> freeSeat = new ArrayList<Seat>();
+			toReturn = bestSeats.get((int)(Math.random()*bestSeats.size()));
+		}
+		else if (freeSeat.size() > 0)
+		{
+			toReturn = freeSeat.get((int)(Math.random()*freeSeat.size()));
+		}
+		else
+		{
+			toReturn = m_seats[(int)(Math.random()*m_seats.length)];
+		}		
 
-			List<Seat> lowestQueue = new ArrayList<Seat>();
-
-			boolean isFree;
-			for(int i = 0; i < m_seats.length; i++){
-				isFree = m_seats[getSeatMod(i)].getSemaphore().availablePermits() == 1;
-
-				if(isFree){
-					freeSeat.add(m_seats[i]);
-					if(m_seats[getSeatMod(i - 1)].getSemaphore().availablePermits() == 1
-							&& m_seats[getSeatMod(i + 1)].getSemaphore().availablePermits() == 1){
-						bestSeats.add(m_seats[i]);
-					}
-				}
-			}
-
-			if(bestSeats.size() > 0){
-				return bestSeats.get((int) (Math.random() * bestSeats.size()));
-			}else if(freeSeat.size() > 0){
-				return freeSeat.get((int) (Math.random() * freeSeat.size()));
-			}else{
-				return m_seats[(int) (Math.random() * m_seats.length)];
-			}
+		if (philosopher.getEaten() - 10 > toReturn.getMinimum())
+		{
+			return null;
+		}
+		else
+		{
+			return toReturn;
 		}
 	}
 
-	public class Seat{
-		private Fork m_fork1;
-		private Fork m_fork2;
+	public class Seat {
+		private Object m_fork1;
+		private Object m_fork2;
 
 		int used = 0;
 
+		int count = 0;
+		List<Philosopher> philosophersThatHaveEatenHere = new ArrayList<Philosopher>(20);
+
 		private Semaphore m_sem = new Semaphore(1, true);
 
-		public Seat(Fork f1, Fork f2){
+		public Seat(Object f1, Object f2) {
 			m_fork1 = f1;
 			m_fork2 = f2;
 		}
 
-		public Fork getFork1(){
-			used = used + 1;
+		public int getEaten() {
+			return used;
+		}
+
+		public Object getFork1() {
 			return m_fork1;
 		}
 
-		public Fork getFork2(){
+		public Object getFork2() {
 			return m_fork2;
 		}
 
+		public void eat(Philosopher philosopher)
+		{
+			if (m_globalMinimumPhilosph == philosopher || m_globalMinimumPhilosph == null || m_globalMinimum > philosopher.eatCount)
+			{
+				m_globalMinimum = philosopher.eatCount;
+				m_globalMinimumPhilosph = philosopher;
+			}
+		}
+
+		public int getMinimum()
+		{
+			return m_globalMinimum;
+		}
+
 		@Override
-		public String toString(){
+		public String toString() {
 			return "Seat: " + m_fork1 + " " + m_fork2 + " used: " + used;
 		}
 
-		public Semaphore getSemaphore(){
+		public Semaphore getSemaphore() {
 			return m_sem;
 		}
 
-	}
-
-	// dummy.
-	public class Fork{
 
 	}
-
 }
