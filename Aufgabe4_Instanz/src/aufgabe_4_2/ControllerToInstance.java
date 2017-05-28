@@ -20,7 +20,5 @@ public interface ControllerToInstance extends Remote, Serializable {
 	void start() throws RemoteException;
 	void stop() throws RemoteException;
 	void exit() throws RemoteException;
-	
-	void log(String tag, long timestamp, String message) throws RemoteException;
-	
+		
 }

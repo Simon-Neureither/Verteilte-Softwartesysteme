@@ -2,24 +2,24 @@ package aufgabe_4_2;
 
 import java.io.Serializable;
 import java.rmi.Remote;
+import java.rmi.RemoteException;
 
 public interface ControllerToInstance extends Remote, Serializable {
 	
 	
 	// Controller to Instance
 	// Rueckgabewert = Verhaeltnis Philosoph / Seat
-	float addPhilosoph(boolean hungry);
-	float removePhilosoph(boolean hungry);
+	float addPhilosoph(boolean hungry) throws RemoteException;
+	float removePhilosoph(boolean hungry) throws RemoteException;
 	
-	float addSeat();
-	float removeSeat();
+	float addSeat() throws RemoteException;
+	float removeSeat() throws RemoteException;
 	
-	void updateNext();
+	void updateNext() throws RemoteException;
 	
-	void start();
-	void stop();
-	void exit();
+	void start() throws RemoteException;
+	void stop() throws RemoteException;
+	void exit() throws RemoteException;
 	
-	void log(String tag, long timestamp, String message);
 	
 }
