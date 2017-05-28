@@ -71,7 +71,6 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 			while (true) {
 				String next = scanner.nextLine();
 				String[] splitted = next.split(" ");
-				System.out.println(actions.get(splitted[0]));
 				actions.getOrDefault(splitted[0], in -> System.out.println("falsche Eingabe"))
 						.accept(Arrays.asList(splitted));
 			}
@@ -141,7 +140,6 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 			} else {
 				
 				int index = 0;
-				boolean isHungry = parseStringToBoolean(list.get(2));
 				for (int i = 1; i < instances.size(); i++)
 				{
 					// Add a seat -> HIGHER is better since it "lowers" the score.
@@ -164,6 +162,72 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 	static void remove(List<String> list) {
 		synchronized (controller) {
 			System.err.println("remove: " + list);
+			
+			if (list.size() < 2)
+			{
+				System.err.println("remove expects min 1 arg");
+				return;
+			}
+			
+			if (instanceScore.size() == 0)
+			{
+				System.err.println("add failed no instance available.");
+				return;
+			}
+			
+			boolean isPhilosopher = parseStringToBoolean(list.get(1));
+			
+			if (isPhilosopher) {
+				if (list.size() < 3) {
+					System.err.println("remove [philosopher] expects min 2 args");
+					return;
+				}
+
+				int index = 0;
+				boolean isHungry = parseStringToBoolean(list.get(2));
+				for (int i = 1; i < instances.size(); i++)
+				{
+					// Add a philosopher -> LOWER is better since it "highers" the score.
+					if (instanceScore.get(i) < instanceScore.get(index))
+					{
+						index = i;
+					}
+				}
+				System.out.println("removing philosopher from instance #" + index);
+				try {
+					float score = instances.get(index).removePhilosoph(isHungry);
+					boolean removed = false;
+					if (score == instanceScore.get(index))
+					{
+						System.err.println("removed failed on instance #" + index);
+						
+						for (int i = 0; i < instances.size(); i++)
+						{
+							score = instances.get(i).removePhilosoph(isHungry);
+							if (score != instanceScore.get(i))
+							{
+								System.out.println("removed philosopher from instance #" + i);
+								instanceScore.set(i, score);
+								removed = true;
+								break;
+							}
+						}
+					}
+					else
+					{
+						System.out.println("removed philosopher sucessfully.");
+						instanceScore.set(index, score);
+					}
+					
+				} catch (RemoteException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			else
+			{
+				// REMOVE SEAT TODO
+			}
 		}
 	}
 

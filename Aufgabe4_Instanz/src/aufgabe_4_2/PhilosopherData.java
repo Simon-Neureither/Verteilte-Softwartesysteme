@@ -6,13 +6,13 @@ import java.util.List;
 
 public class PhilosopherData {
 
-	private boolean isHungry;
+	private boolean m_isHungry;
 	final private List<State> dailyRoutine;
 
 	public PhilosopherData(boolean isHungry, int eatenOffset) {
-		this.isHungry = isHungry;
+		this.m_isHungry = isHungry;
 		this.eatenOffset = eatenOffset;
-		dailyRoutine = Collections.unmodifiableList(this.isHungry ? hungry : normal);
+		dailyRoutine = Collections.unmodifiableList(this.m_isHungry ? hungry : normal);
 	}
 
 	enum State {
@@ -55,6 +55,11 @@ public class PhilosopherData {
 
 	public List<State> getDailyRoutine() {
 		return dailyRoutine;
+	}
+	
+	public boolean isHungry()
+	{
+		return m_isHungry;
 	}
 	
 	// Eat handling.

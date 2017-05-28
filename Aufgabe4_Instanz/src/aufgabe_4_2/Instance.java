@@ -45,14 +45,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			e.printStackTrace();
 		}
 	}
-
-	@Override
-	public synchronized float addPhilosoph(boolean hungry) {
-		// TODO Auto-generated method stub
-		
+	
+	/**
+	 * Simplifies controller log message calls.
+	 * @param tag
+	 * @param message
+	 */
+	private void controllerLog(String tag, String message)
+	{
+		System.out.println("[" + tag + "] " + message);
 		try
 		{
-			controller.log("instance", System.currentTimeMillis(), "adding philosoph " + hungry);
+			controller.log(tag, System.currentTimeMillis(), message);
 		
 		}
 		catch (RemoteException e)
@@ -60,6 +64,13 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			// TODO
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public synchronized float addPhilosoph(boolean hungry) {
+		// TODO Auto-generated method stub
+		
+		controllerLog("addPhilosoph", "adding philosoph " + hungry);
 		
 		synchronized (philosophers)
 		{
@@ -67,24 +78,42 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			philosophers.add(new PhilosopherData(false, 0));
 		}
 		
-		try
-		{
-			controller.log("instance", System.currentTimeMillis(), "added philosoph " + hungry);
-		
-		}
-		catch (RemoteException e)
-		{
-			// TODO
-			e.printStackTrace();
-		}
+		controllerLog("addPhilosoph", "added philosoph " + hungry);
 		
 		return calcRatio(philosophers.size(), seats.size());
 	}
+	
+
 
 	@Override
 	public synchronized float removePhilosoph(boolean hungry) {
-		// TODO Auto-generated method stub
-		return 0;
+		controllerLog("removePhilosoph", "removing philosoph " + hungry);
+		
+		boolean removed = false;
+		synchronized (philosophers)
+		{
+			
+			for (int i = 0; i < philosophers.size(); i++)
+			{
+				if (philosophers.get(i).isHungry() == hungry)
+				{
+					System.err.println("B: " + philosophers);
+
+					PhilosopherData data = philosophers.remove(i);
+					System.err.println(philosophers);
+					controllerLog("removePhilosoph", "stopping philosopher to remove...");
+					data.stop();
+					controllerLog("removePhilosoph", "stopped philosopher to remove");
+					removed = true;
+					break;
+				}
+			}
+		}
+		System.err.println(philosophers);
+
+		controllerLog("removePhilosoph", "removed philosoph " + hungry + " removed: " + (removed ? "YES" : "NO"));
+
+		return calcRatio(philosophers.size(), seats.size());
 	}
 
 	@Override
