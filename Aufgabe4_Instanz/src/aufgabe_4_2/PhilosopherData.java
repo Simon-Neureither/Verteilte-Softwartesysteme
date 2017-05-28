@@ -9,8 +9,9 @@ public class PhilosopherData {
 	private boolean isHungry;
 	final private List<State> dailyRoutine;
 
-	public PhilosopherData(boolean isHungry) {
+	public PhilosopherData(boolean isHungry, int eatenOffset) {
 		this.isHungry = isHungry;
+		this.eatenOffset = eatenOffset;
 		dailyRoutine = Collections.unmodifiableList(this.isHungry ? hungry : normal);
 	}
 
@@ -43,16 +44,51 @@ public class PhilosopherData {
 		hungry.add(State.SLEEP);
 	}
 
-	public int eaten = 0;
+	private int eaten = 0;
+	private int eatenOffset = 0; // offset to add to eat (used when the philosopher joins later).
 	public int waited = 0;
 
 	public int sleepTime = 10;
 	public int eatTime = 1;
 	// TODO hungry less meditate time?
 	public int meditateTime = 5;
-	
-	public List<State> getDailyRoutine()
-	{
+
+	public List<State> getDailyRoutine() {
 		return dailyRoutine;
+	}
+	
+	// Eat handling.
+	public int getEaten()
+	{
+		return eaten + eatenOffset;
+	}
+	public int getRealEaten()
+	{
+		return eaten;
+	}
+
+	// Thread handling.
+	private PhilosopherThread thread;
+
+	public boolean hasThread() {
+		return thread != null;
+	}
+
+	public PhilosopherThread getThread() {
+		return thread;
+	}
+
+	public void stop() {
+		if (thread != null) {
+			thread.stopPhilosopher();
+			thread = null;
+		}
+	}
+
+	public void start() {
+		if (thread == null) {
+			thread = new PhilosopherThread(this);
+			thread.start();
+		}
 	}
 }
