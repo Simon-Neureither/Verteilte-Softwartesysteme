@@ -16,7 +16,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private InstanceToController controller;
 	
 	private List<PhilosopherData> philosophers = new ArrayList<PhilosopherData>();
-	private List<PhilosopherData> seats = new ArrayList<PhilosopherData>();
+	private List<Object> seats = new ArrayList<Object>();
 	
 	private boolean hasStarted = false;
 	
@@ -97,10 +97,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			{
 				if (philosophers.get(i).isHungry() == hungry)
 				{
-					System.err.println("B: " + philosophers);
-
 					PhilosopherData data = philosophers.remove(i);
-					System.err.println(philosophers);
 					controllerLog("removePhilosoph", "stopping philosopher to remove...");
 					data.stop();
 					controllerLog("removePhilosoph", "stopped philosopher to remove");
@@ -109,8 +106,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				}
 			}
 		}
-		System.err.println(philosophers);
-
+		
 		controllerLog("removePhilosoph", "removed philosoph " + hungry + " removed: " + (removed ? "YES" : "NO"));
 
 		return calcRatio(philosophers.size(), seats.size());
@@ -118,8 +114,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	@Override
 	public synchronized float addSeat() {
-		// TODO Auto-generated method stub
-		return 0;
+
+		// TODO dummy impl.
+		seats.add(new Object());
+		
+		return calcRatio(philosophers.size(), seats.size());
 	}
 
 	@Override

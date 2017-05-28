@@ -44,6 +44,18 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 		actions.put("register", Controller::register);
 		actions.put("add", Controller::add);
 		actions.put("remove", Controller::remove);
+		
+		actions.put("addP", in -> { add(Arrays.asList("add", "1", "0")); });
+		actions.put("addH", in -> { add(Arrays.asList("add", "1", "1")); });
+		actions.put("addS", in -> { add(Arrays.asList("add", "0")); });
+		
+		actions.put("score", in -> {
+			
+			for (int i = 0; i < instances.size(); i++)
+			{
+				System.out.println(i + ": " + instanceScore.get(i));
+			}
+		});
 	}
 
 	public static void main(String... args) {
@@ -148,7 +160,7 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 						index = i;
 					}
 				}
-				System.out.println("Adding philosopher to instance #" + index);
+				System.out.println("Adding seat to instance #" + index);
 				try {
 					instanceScore.set(index, instances.get(index).addSeat());
 				} catch (RemoteException e) {
