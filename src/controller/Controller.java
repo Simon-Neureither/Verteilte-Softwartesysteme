@@ -17,52 +17,36 @@ import java.util.function.Consumer;
 import shared_interfaces.InstanceHandle;
 import shared_interfaces.InstanceToController;
 
-public class Controller extends UnicastRemoteObject implements InstanceToController {
-
-	protected Controller() throws RemoteException {
-		super();
-		// TODO Auto-generated constructor stub
-	}
+public class Controller {
 
 	private static Map<String, Consumer<List<String>>> actions = new HashMap<>();
 	private static String localIP;
-
-	private static Controller controller;
+	
+	private static InstanceToControllerImpl instanceToController;
 
 	// Holds all instances.
 	private  static List<InstanceHandle> instances = new ArrayList<InstanceHandle>();
 	// Holds the "score" of an instance.
-	private static List<Float> instanceScore = new ArrayList<Float>();
-
-	static {
-		try {
-			controller = new Controller();
-		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
+	private static List<Float> instanceScores = new ArrayList<Float>();
 
 	static {
 		actions.put("register", Controller::register);
 		actions.put("add", Controller::add);
 		actions.put("remove", Controller::remove);
 		
-		actions.put("addP", in -> { add(Arrays.asList("add", "1", "0")); });
-		actions.put("addH", in -> { add(Arrays.asList("add", "1", "1")); });
-		actions.put("addS", in -> { add(Arrays.asList("add", "0")); });
+		actions.put("addP", in -> add(Arrays.asList("add", "1", "0")));
+		actions.put("addH", in -> add(Arrays.asList("add", "1", "1")));
+		actions.put("addS", in -> add(Arrays.asList("add", "0")));
 		
 		actions.put("score", in -> {
-			
 			for (int i = 0; i < instances.size(); i++)
 			{
-				System.out.println(i + ": " + instanceScore.get(i));
+				System.out.println(i + ": " + instanceScores.get(i));
 			}
 		});
 	}
 
 	public static void main(String... args) {
-
 		if (args.length < 1) {
 			System.err.println("Need ip.");
 			return;
@@ -72,8 +56,9 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 
 		Registry registry;
 		try {
+			instanceToController = new InstanceToControllerImpl(instances, instanceScores);
 			registry = LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
-			registry.bind("controller", (InstanceToController) controller);
+			registry.bind("controller", (InstanceToController) instanceToController);
 		} catch (RemoteException e) {
 			e.printStackTrace();
 			return;
@@ -95,7 +80,6 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 	static void register(List<String> list) {
 		System.err.println("register: " + list);
 		String ip = list.get(0);
-
 	}
 
 	private static boolean parseStringToBoolean(String string) {
@@ -104,17 +88,16 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 			bool = Integer.parseInt(string) != 0;
 		} catch (NumberFormatException e) {
 			bool = false;
-
 			bool = string.equalsIgnoreCase("y") || string.equalsIgnoreCase("j");
 		}
 		return bool;
 	}
 
 	static void add(List<String> list) {
-		synchronized (controller) {
+		synchronized (instanceToController) {
 			System.err.println("add: " + list);
 			
-			if (instanceScore.size() == 0)
+			if (instanceScores.size() == 0)
 			{
 				System.err.println("add failed no instance available.");
 				return;
@@ -138,14 +121,14 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				for (int i = 1; i < instances.size(); i++)
 				{
 					// Add a philosopher -> LOWER is better since it "highers" the score.
-					if (instanceScore.get(i) < instanceScore.get(index))
+					if (instanceScores.get(i) < instanceScores.get(index))
 					{
 						index = i;
 					}
 				}
 				System.out.println("Adding philosopher to instance #" + index);
 				try {
-					instanceScore.set(index, instances.get(index).addPhilosoph(isHungry));
+					instanceScores.set(index, instances.get(index).addPhilosoph(isHungry));
 				} catch (RemoteException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -158,14 +141,14 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				for (int i = 1; i < instances.size(); i++)
 				{
 					// Add a seat -> HIGHER is better since it "lowers" the score.
-					if (instanceScore.get(i) > instanceScore.get(index))
+					if (instanceScores.get(i) > instanceScores.get(index))
 					{
 						index = i;
 					}
 				}
 				System.out.println("Adding seat to instance #" + index);
 				try {
-					instanceScore.set(index, instances.get(index).addSeat());
+					instanceScores.set(index, instances.get(index).addSeat());
 				} catch (RemoteException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -175,7 +158,7 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 	}
 
 	static void remove(List<String> list) {
-		synchronized (controller) {
+		synchronized (instanceToController) {
 			System.err.println("remove: " + list);
 			
 			if (list.size() < 2)
@@ -184,7 +167,7 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				return;
 			}
 			
-			if (instanceScore.size() == 0)
+			if (instanceScores.size() == 0)
 			{
 				System.err.println("add failed no instance available.");
 				return;
@@ -203,7 +186,7 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				for (int i = 1; i < instances.size(); i++)
 				{
 					// Add a philosopher -> LOWER is better since it "highers" the score.
-					if (instanceScore.get(i) < instanceScore.get(index))
+					if (instanceScores.get(i) < instanceScores.get(index))
 					{
 						index = i;
 					}
@@ -212,17 +195,17 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				try {
 					float score = instances.get(index).removePhilosoph(isHungry);
 					boolean removed = false;
-					if (score == instanceScore.get(index))
+					if (score == instanceScores.get(index))
 					{
 						System.err.println("removed failed on instance #" + index);
 						
 						for (int i = 0; i < instances.size(); i++)
 						{
 							score = instances.get(i).removePhilosoph(isHungry);
-							if (score != instanceScore.get(i))
+							if (score != instanceScores.get(i))
 							{
 								System.out.println("removed philosopher from instance #" + i);
-								instanceScore.set(i, score);
+								instanceScores.set(i, score);
 								removed = true;
 								break;
 							}
@@ -231,7 +214,7 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 					else
 					{
 						System.out.println("removed philosopher sucessfully.");
-						instanceScore.set(index, score);
+						instanceScores.set(index, score);
 					}
 					
 				} catch (RemoteException e) {
@@ -244,36 +227,6 @@ public class Controller extends UnicastRemoteObject implements InstanceToControl
 				// REMOVE SEAT TODO
 			}
 		}
-	}
-
-	@Override
-	public synchronized void addInstance(InstanceHandle instance) throws RemoteException {
-		System.err.println("addInstance: " + instance);
-		instances.add(instance);
-		instanceScore.add((float) 1.0); // TODO what is the best score for an empty instance?
-	}
-
-	@Override
-	public synchronized void removeInstance(InstanceHandle instance) throws RemoteException {
-		System.err.println("removeInstance: " + instance);
-		int index = instances.indexOf(instance);
-		
-		// TODO updatenext/change fork etc..
-		instances.remove(index);
-		instanceScore.remove(index);
-	}
-
-	@Override
-	public InstanceHandle nextInstance(InstanceHandle instance) throws RemoteException {
-		// TODO Auto-generated method stub
-		System.err.println("nextInstance");
-		return null;
-	}
-
-	@Override
-	public void log(String tag, long timestamp, String message) throws RemoteException {
-		// TODO Auto-generated method stub
-		System.err.println("[" + tag + "@" + timestamp + "] " + message);
 	}
 
 }
