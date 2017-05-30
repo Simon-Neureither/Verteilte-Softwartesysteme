@@ -44,6 +44,17 @@ public class Controller {
 		});
 		
 		actions.put("ip", args -> System.out.println(Controller.localIP));
+		
+		actions.put("debug_printSeats", in -> {for (int i = 0; i < instances.size(); i++)
+		{
+			try {
+				System.out.println("Instance: " + i + ": " + instances.get(i).debug_getSeatsAsString());
+			} catch (RemoteException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		});
 	}
 
 	public static void main(String... args) {

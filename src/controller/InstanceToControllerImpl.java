@@ -24,6 +24,14 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 		System.err.println("addInstance: " + instance);
 		instances.add(instance);
 		instanceScores.add((float) 1.0); // TODO what is the best score for an empty instance?
+		
+		
+		instances.get(instances.size() - 1).updateNext();
+		
+		if (instances.size() != 1)
+		{
+			instances.get(instances.size() - 2).updateNext();
+		}
 	}
 
 	@Override
@@ -38,9 +46,14 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 
 	@Override
 	public InstanceHandle nextInstance(InstanceHandle instance) throws RemoteException {
-		// TODO Auto-generated method stub
-		System.err.println("nextInstance");
-		return null;
+		int index = instances.indexOf(instance);
+		
+		// Return next in list (if any).
+		if (index + 1 < instances.size())
+			return instances.get(index + 1);
+		
+		// Return instance @0 (ring).
+		return instances.get(0);
 	}
 
 	@Override

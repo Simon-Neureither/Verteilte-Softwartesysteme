@@ -1,28 +1,182 @@
 package instance;
 
+import java.rmi.NoSuchObjectException;
 import java.rmi.NotBoundException;
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.RemoteObject;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import shared_interfaces.ControllerToInstance;
 import shared_interfaces.InstanceHandle;
 import shared_interfaces.InstanceToController;
 
 public class Instance extends UnicastRemoteObject implements InstanceHandle {
+	
+	// Set if the instance was in one time the first instance.
+	// Used to determine the lock order for the first seat.
+	// So that no deadlock can occur.
+	private boolean instanceWasLonely = false;
+	
+	
+	/**
+	 * Class to represent a seat, it contains two forks.
+	 * If the second fork (fork2) is null it means that the next instance has the fork
+	 * and that nextInstance.lockNext() should be called to lock it.
+	 */
+	public class Seat {
+		
+		private boolean lockOrder;
+		private Semaphore fork1;
+		private Semaphore fork2;
+		
+		public void setLockOrder(boolean order)
+		{
+			lockOrder = order;
+		}
+		
+		public boolean getLockOrder()
+		{
+			return lockOrder;
+		}
+		
+		public void setFork1(Semaphore fork)
+		{
+			fork1 = fork;
+		}
+		
+		public void setFork2(Semaphore fork)
+		{
+			fork2 = fork;
+		}
+		
+		private boolean lock1()
+		{
+			fork1.acquireUninterruptibly();
+			return true;
+		}
+		private void release1()
+		{
+			fork1.release();
+		}
+		private void release2()
+		{
+			if (fork2 == null)
+			{
+				try
+				{
+					nextInstance.freeNext();
+				}
+				catch (RemoteException e)
+				{
+					// TODO critical error
+					System.err.println("CRITICAL ERROR");
+					e.printStackTrace();
+				}
+			}
+			else
+			{				
+				fork2.release();
+			}
+		}
+	
+		private boolean lock2()
+		{
+			if (fork2 == null)
+			{
+				try {
+					nextInstance.lockNext();
+				} catch (RemoteException e) {
+					return false;
+				}
+			}
+			else
+			{
+				fork2.acquireUninterruptibly();
+			}
+			return true;
+		}
+		
+		
+		// Locks both semaphores.
+		public boolean lock()
+		{
+			boolean locked1 = false;
+			boolean locked2 = false;
+			
+			if (!lockOrder)
+			{
+				locked1 = lock1();
+				if (!locked1)
+					return false;
+				locked2 = lock2();
+				if (!locked2)
+					release1();
+				return true;
+			}
+			else
+			{
+				locked2 = lock2();
+				if (!locked2)
+					return false;
+				locked1 = lock1();
+				if (!locked1)
+					release2();
+				return true;
+			}
+		}
+		
+		// Releases both semaphores. TODO necessary?
+		public void release()
+		{
+			if (!lockOrder)
+			{
+				release1();
+				release2();
+			}
+			else
+			{
+				release2();
+				release1();
+			}
+		}
+		
+		@Override
+		public String toString()
+		{
+			return "Seat: "  + fork1 + "  : " + fork2;
+		}
+	
+		public Semaphore getFork1() {
+			return fork1;
+		}
+		
+		public Semaphore getFork2()
+		{
+			return fork2;
+		}
+	}
 
+	
+	private Semaphore leftFork = new Semaphore(0);
+	
 	private String controllerAddress;
 	private Registry registry;
 	
 	private InstanceToController controller;
 	
 	private List<PhilosopherData> philosophers = new ArrayList<PhilosopherData>();
-	private List<Object> seats = new ArrayList<Object>();
+	private List<Seat> seats = new ArrayList<Seat>();
 	
 	private boolean hasStarted = false;
+	
+	private InstanceHandle nextInstance;
 	
 	private Instance(String controllerAddress) throws RemoteException, NotBoundException
 	{
@@ -57,6 +211,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 */
 	private void controllerLog(String tag, String message)
 	{
+		tag += this.hashCode();
 		System.out.println("[" + tag + "] " + message);
 		try
 		{
@@ -118,22 +273,102 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	@Override
 	public synchronized float addSeat() {
-
-		// TODO dummy impl.
-		seats.add(new Object());
+		
+		Seat seat = new Seat();
+		seat.setFork2(null); // -> null means next fork (from next instance).
+		
+		if (seats.size() == 0)
+		{
+			// No seat...
+			seat.setLockOrder(instanceWasLonely); // Only one instance may start with this flag set.
+			seat.setFork1(leftFork);
+			seat.setFork2(null); // --> null means next fork (next instance)
+		}
+		else
+		{
+			
+			// Add new seat as last seat.
+			Seat prevSeat = seats.get(seats.size() - 1);
+			// Switch the order the seat locks the forks -> better performance, no deadlocks.
+			seat.setLockOrder(!prevSeat.lockOrder);
+			// Lock seat.
+			synchronized (prevSeat)
+			{
+				// Make them share a fork.
+				prevSeat.setFork2(new Semaphore(1, true));
+				seat.setFork1(prevSeat.getFork2());
+			}
+		}
+		
+		// Only instance?
+		if (this.equals(nextInstance))
+		{
+			// Only one place, so it gets two forks.
+			if (seats.size() == 0)
+			{
+				seat.setFork2(new Semaphore(1, true));
+			}
+			else
+			{
+				// #seats > 0 -> it gets first fork
+				seat.setFork2(leftFork);
+			}
+		}
+		
+		// Finally release the seat to the philosophers.
+		seats.add(seat);
 		
 		return calcRatio(philosophers.size(), seats.size());
 	}
 
 	@Override
 	public synchronized float removeSeat() {
-		// TODO Auto-generated method stub
-		return 0;
+		if (seats.size() == 0)
+		{
+			return calcRatio(philosophers.size(), seats.size());
+		}
+		else if (seats.size() == 1)
+		{
+			// We had one seat so...
+			if (this.equals(nextInstance))
+			{
+				// Lonely?
+				synchronized (seats.get(0))
+				{
+					seats.remove(0);
+				}
+			}
+		}
+		return calcRatio(philosophers.size(), seats.size());
 	}
 
 	@Override
 	public synchronized void updateNext() throws RemoteException  {
-		controller.nextInstance(this);
+		
+		// TODO
+		// Since it is not required to handle changing instances,
+		// there is no handling of philosophers eating at the last seat
+		// while adding a new instance.
+		nextInstance = controller.nextInstance(this);
+		
+		if (this.equals(nextInstance))
+		{
+			System.out.println("this instance is lonely");
+			
+			instanceWasLonely = true;
+		}
+		else
+		{
+			System.out.println("this instance has a 'real' next");
+			
+			// Update the last seat.
+			if (seats.size() > 0)
+			{
+				seats.get(seats.size() - 1).setFork2(null);
+			}
+		}
+		
+		controllerLog("updateNext", "updated next to: " + nextInstance);
 	}
 
 	@Override
@@ -209,14 +444,45 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public void lockNext() {
-		// TODO Auto-generated method stub
+	public void lockNext() throws RemoteException {
+		// Lockt die erste "gabel"
+		// Falls kein platz -> nextIntance.lockNext();		
 		
+		if (this.seats.size() == 0)
+		{
+			nextInstance.lockNext();
+		}
+		else
+		{
+			// TODO
+		}
+		
+	}
+	
+	@Override
+	public boolean equals(Object o)
+	{
+		try {
+			return RemoteObject.toStub(this).equals(RemoteObject.toStub((Remote) o));
+		} catch (NoSuchObjectException e) {
+			e.printStackTrace();
+		}
+		
+		return false;
 	}
 
 	@Override
-	public void freeNext() {
+	public void freeNext() throws RemoteException {
 		// TODO Auto-generated method stub
+		
+		if (this.seats.size() == 0)
+		{
+			nextInstance.freeNext();
+		}
+		else
+		{
+			seats.get(0);
+		}
 		
 	}
 	
@@ -234,5 +500,10 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			return (float) (amountPhilosophers == 0 ? 1.0 : 1.0 / 0);
 		}
 		return ((float)amountPhilosophers) / amountSeats;
+	}
+
+	@Override
+	public synchronized String debug_getSeatsAsString() throws RemoteException {
+		return seats.toString();
 	}
 }

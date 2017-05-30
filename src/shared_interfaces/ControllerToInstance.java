@@ -21,5 +21,5 @@ public interface ControllerToInstance extends Remote, Serializable {
 	void stop() throws RemoteException;
 	void exit() throws RemoteException;
 	
-	
+	String debug_getSeatsAsString() throws RemoteException;
 }
