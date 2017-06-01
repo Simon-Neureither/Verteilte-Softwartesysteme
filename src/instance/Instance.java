@@ -11,11 +11,11 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import shared_interfaces.ControllerToInstance;
 import shared_interfaces.InstanceHandle;
 import shared_interfaces.InstanceToController;
+import shared_interfaces.InstanceToInstance;
 
 public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
@@ -23,7 +23,27 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	// Used to determine the lock order for the first seat.
 	// So that no deadlock can occur.
 	private boolean instanceWasLonely = false;
+		
+	/**
+	 * Semaphore to lock 'hadSeatWhileLocked'.
+	 */
+	private Semaphore prevSeatSemaphore = new Semaphore(1, true);
+	/**
+	 * Flag for "lockNext" and "freeNext".
+	 */
+	private boolean hadSeatWhileLocked = false;
+	private boolean hadMoreThanOneSeatWhileLocked = false;
 	
+	/**
+	 * Semaphore to lock 'hasSeats'
+	 */
+	private Semaphore hasSeatsSemaphore = new Semaphore(1, true);
+	/**
+	 * Flag for "lockNext" and free Next.
+	 */
+	private boolean hasSeats = false;
+	
+	private boolean hasMoreThanOneSeat = false;
 	
 	/**
 	 * Class to represent a seat, it contains two forks.
@@ -74,7 +94,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			{
 				try
 				{
-					nextInstance.freeNext();
+					nextInstance.freeNext(Instance.this);
 				}
 				catch (RemoteException e)
 				{
@@ -94,7 +114,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			if (fork2 == null)
 			{
 				try {
-					nextInstance.lockNext();
+					nextInstance.lockNext(Instance.this);
 				} catch (RemoteException e) {
 					return false;
 				}
@@ -203,7 +223,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	
 	private Semaphore leftFork = new Semaphore(0);
+	private Semaphore rightFork = new Semaphore(0);
 	
+		
 	private String controllerAddress;
 	private Registry registry;
 	
@@ -272,7 +294,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		synchronized (philosophers)
 		{
 			// TODO replace 0 with minimum eaten + some offset.
-			philosophers.add(new PhilosopherData(false, 0));
+			philosophers.add(new PhilosopherData(false, 0, this));
 		}
 		
 		controllerLog("addPhilosoph", "added philosoph " + hungry);
@@ -320,41 +342,29 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			// No seat...
 			seat.setLockOrder(instanceWasLonely); // Only one instance may start with this flag set.
 			seat.setFork1(leftFork);
-			seat.setFork2(null); // --> null means next fork (next instance)
 		}
 		else
 		{
-			
 			// Add new seat as last seat.
 			Seat prevSeat = seats.get(seats.size() - 1);
 			// Switch the order the seat locks the forks -> better performance, no deadlocks.
 			seat.setLockOrder(!prevSeat.lockOrder);
 			// Lock seat.
-			synchronized (prevSeat)
-			{
-				// Make them share a fork.
-				prevSeat.setFork2(new Semaphore(1, true));
-				seat.setFork1(prevSeat.getFork2());
-			}
-		}
-		
-		// Only instance?
-		if (this.equals(nextInstance))
-		{
-			// Only one place, so it gets two forks.
-			if (seats.size() == 0)
-			{
-				seat.setFork2(new Semaphore(1, true));
-			}
-			else
-			{
-				// #seats > 0 -> it gets first fork
-				seat.setFork2(leftFork);
-			}
+			
+			// Remap the "right" fork of the previous Seat
+			// To a new shared fork.
+			prevSeat.lockSeat();
+			prevSeat.setFork2(new Semaphore(1, true));
+			seat.setFork1(prevSeat.getFork2());
+			prevSeat.releaseSeat();
 		}
 		
 		// Finally release the seat to the philosophers.
+		hasSeatsSemaphore.acquireUninterruptibly();
+		hasSeats = true;
+		hasMoreThanOneSeat = seats.size() > 0;
 		seats.add(seat);
+		hasSeatsSemaphore.release();
 		
 		return calcRatio(philosophers.size(), seats.size());
 	}
@@ -365,15 +375,45 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		{
 			controllerLog("removeSeat", "no seat available.");
 		}
-		else if (seats.size() > 1)
+		else if (seats.size() > 0)
 		{
 			int idx = seats.size() - 1;
 			Seat seat = seats.get(idx);
+			
+			
+			// Make seat no longer visible for the next philosophers.
 			seat.lockSeat();
 			seat.setSeatValid(false);
 			seat.releaseSeat();
 			seats.remove(idx);
-			controllerLog("removeSeat", "removed Seat");
+			
+			if (idx > 0)
+			{
+				// There is a previous seat in this instance.
+				Seat prevSeat = seats.get(idx -1);
+				prevSeat.lockSeat();
+				
+				// Null means use fork of next instance.
+				// TODO what if there is no instance with a seat but this?
+				prevSeat.setFork2(null);
+				
+				prevSeat.releaseSeat();
+			}
+			
+			controllerLog("removeSeat", "removed seat");
+			
+			if (idx == 1)
+			{
+				hasMoreThanOneSeat = seats.size() > 0;
+			}
+			
+			if (idx == 0)
+			{
+				controllerLog("removeSeat", "removed Seat has removed last seat");
+				hasSeatsSemaphore.acquireUninterruptibly();
+				hasSeats = false;
+				hasSeatsSemaphore.release();
+			}
 		}
 		return calcRatio(philosophers.size(), seats.size());
 	}
@@ -460,8 +500,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 	
 	@Override
-	public ControllerToInstance getAvailable(InstanceHandle self) {
-		// TODO Auto-generated method stub
+	public InstanceToInstance getAvailable(InstanceHandle self) {
+				
+		
 		return null;
 	}
 
@@ -478,21 +519,57 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public void lockNext() throws RemoteException {
-		// Lockt die erste "gabel"
-		// Falls kein platz -> nextIntance.lockNext();		
+	public void lockNext(InstanceHandle handle) throws RemoteException {
+		// TODO cycle.		
+		prevSeatSemaphore.acquireUninterruptibly();
+		hasSeatsSemaphore.acquireUninterruptibly();
 		
-		if (this.seats.size() == 0)
+		if (!hadMoreThanOneSeatWhileLocked && this.equals(handle))
 		{
-			nextInstance.lockNext();
+			// It's the only seat in the whole system.
+			rightFork.acquireUninterruptibly();
 		}
 		else
 		{
-			// TODO
+			if (hasSeats)
+			{
+				nextInstance.lockNext(this);
+				hadSeatWhileLocked = true;
+			}
+			else
+			{
+				leftFork.acquireUninterruptibly();
+				hadSeatWhileLocked = false;
+			}
 		}
+		
+		hasSeatsSemaphore.release();
+		prevSeatSemaphore.release();
 		
 	}
 	
+	@Override
+	public void freeNext(InstanceHandle handle) throws RemoteException {
+		// TODO cycle.
+	
+		prevSeatSemaphore.acquireUninterruptibly();
+		
+		if (!hadMoreThanOneSeatWhileLocked && this.equals(handle))
+		{
+			// It was the only seat ever.
+			rightFork.release();
+		}
+		else if (hadSeatWhileLocked)
+		{
+			leftFork.release();
+		}
+		else
+		{
+			nextInstance.lockNext(this);
+		}
+		prevSeatSemaphore.release();
+	}
+
 	@Override
 	public boolean equals(Object o)
 	{
@@ -505,21 +582,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		return false;
 	}
 
-	@Override
-	public void freeNext() throws RemoteException {
-		// TODO Auto-generated method stub
-		
-		if (this.seats.size() == 0)
-		{
-			nextInstance.freeNext();
-		}
-		else
-		{
-			seats.get(0);
-		}
-		
-	}
-	
 	/**
 	 * Calculates the "score" of the instance.
 	 * The lower the number, the better.

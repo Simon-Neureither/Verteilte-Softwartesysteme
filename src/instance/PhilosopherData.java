@@ -8,11 +8,14 @@ public class PhilosopherData {
 
 	private boolean m_isHungry;
 	final private List<State> dailyRoutine;
+	
+	private Instance instance;
 
-	public PhilosopherData(boolean isHungry, int eatenOffset) {
+	public PhilosopherData(boolean isHungry, int eatenOffset, Instance instance) {
 		this.m_isHungry = isHungry;
 		this.eatenOffset = eatenOffset;
 		dailyRoutine = Collections.unmodifiableList(this.m_isHungry ? hungry : normal);
+		this.instance = instance;
 	}
 
 	enum State {

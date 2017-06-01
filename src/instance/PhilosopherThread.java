@@ -13,7 +13,7 @@ public class PhilosopherThread extends Thread {
 	}
 
 	public void stopPhilosopher() {
-		stop.set(true);;
+		stop.set(true);
 	}
 
 	@Override
@@ -27,6 +27,7 @@ public class PhilosopherThread extends Thread {
 					switch (dailyRoutine.get(i)) {
 					case EAT:
 						// TODO
+						
 						break;
 					case MEDITATE:
 						sleep(data.meditateTime);
