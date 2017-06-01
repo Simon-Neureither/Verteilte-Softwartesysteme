@@ -36,6 +36,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		private Semaphore fork1;
 		private Semaphore fork2;
 		
+		final private Semaphore seatLock = new Semaphore(1, true);
+		private boolean seatValid = true;
+		
 		public void setLockOrder(boolean order)
 		{
 			lockOrder = order;
@@ -104,8 +107,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 		
 		
-		// Locks both semaphores.
-		public boolean lock()
+		/**
+		 * Locks the forks.
+		 * @return true if successful, false if not (false only if RemoteException occured).
+		 */
+		public boolean lockForks()
 		{
 			boolean locked1 = false;
 			boolean locked2 = false;
@@ -132,25 +138,57 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			}
 		}
 		
-		// Releases both semaphores. TODO necessary?
-		public void release()
+		
+		/**
+		 * Releases forks.
+		 */
+		public void releaseForks()
 		{
-			if (!lockOrder)
-			{
-				release1();
-				release2();
-			}
-			else
-			{
-				release2();
-				release1();
-			}
+			release1();
+			release2();
+		}
+		
+		/**
+		 * Locks the seat.
+		 */
+		public void lockSeat()
+		{
+			seatLock.acquireUninterruptibly();
+		}
+		
+		public void releaseSeat()
+		{
+			seatLock.release();
+		}
+		
+		/**
+		 * Checks if the seat is still valid.
+		 * 
+		 * May only be called when the seatLock (lockSeat) is held.
+		 * 
+		 * @return true if valid, false otherwise.
+		 */
+		public boolean isSeatValid()
+		{
+			return seatValid;
+		}
+		
+		/**
+		 * Sets the seat valid flag.
+		 * 
+		 * May only be called when the seatLock (lockSeat) is held.
+		 * 
+		 * @param flag state.s
+		 */
+		public void setSeatValid(boolean flag)
+		{
+			seatValid = flag;
 		}
 		
 		@Override
 		public String toString()
 		{
-			return "Seat: "  + fork1 + "  : " + fork2;
+			return "Seat: "  + fork1 + "  : " + fork2 + " : valid: " + isSeatValid();
 		}
 	
 		public Semaphore getFork1() {
@@ -325,19 +363,17 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	public synchronized float removeSeat() {
 		if (seats.size() == 0)
 		{
-			return calcRatio(philosophers.size(), seats.size());
+			controllerLog("removeSeat", "no seat available.");
 		}
-		else if (seats.size() == 1)
+		else if (seats.size() > 1)
 		{
-			// We had one seat so...
-			if (this.equals(nextInstance))
-			{
-				// Lonely?
-				synchronized (seats.get(0))
-				{
-					seats.remove(0);
-				}
-			}
+			int idx = seats.size() - 1;
+			Seat seat = seats.get(idx);
+			seat.lockSeat();
+			seat.setSeatValid(false);
+			seat.releaseSeat();
+			seats.remove(idx);
+			controllerLog("removeSeat", "removed Seat");
 		}
 		return calcRatio(philosophers.size(), seats.size());
 	}
@@ -376,7 +412,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		try {
 			controller.log(this.toString(), System.currentTimeMillis(), "starting instance");
 		} catch (RemoteException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		if (!hasStarted)
@@ -390,7 +425,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		try {
 			controller.log(this.toString(), System.currentTimeMillis(), "has started");
 		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -505,5 +539,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	@Override
 	public synchronized String debug_getSeatsAsString() throws RemoteException {
 		return seats.toString();
+	}
+
+	@Override
+	public String getPhilosophersAsString() throws RemoteException {
+		
+		String str = "";
+		for (int i = 0; i < philosophers.size(); i++)
+		{
+			if (i != 0)
+				str = str + System.lineSeparator();
+			str = str + philosophers.get(i);
+		}
+		return str;
 	}
 }

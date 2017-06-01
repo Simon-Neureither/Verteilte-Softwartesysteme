@@ -96,4 +96,9 @@ public class PhilosopherData {
 			thread.start();
 		}
 	}
+	
+	public String toString()
+	{
+		return "Philosopher: hungry: " + m_isHungry + " : eaten: " + eaten + " : eatenOffset: " + eatenOffset;
+	}
 }

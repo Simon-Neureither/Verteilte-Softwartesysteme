@@ -35,7 +35,7 @@ public class Controller {
 		actions.put("rmP", args -> Controller.removePhilosoph(false));
 		actions.put("rmH", args -> Controller.removePhilosoph(true));
 		actions.put("rmS", Controller::removeSeat);
-
+		
 		actions.put("scores", in -> {
 			for (int i = 0; i < instances.size(); i++)
 			{
@@ -46,14 +46,33 @@ public class Controller {
 		actions.put("ip", args -> System.out.println(Controller.localIP));
 		
 		actions.put("debug_printSeats", in -> {for (int i = 0; i < instances.size(); i++)
-		{
 			try {
 				System.out.println("Instance: " + i + ": " + instances.get(i).debug_getSeatsAsString());
 			} catch (RemoteException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
+		});
+		
+		actions.put("start", in ->
+				{
+					for (int i = 0; i < instances.size(); i++)
+						try {
+							instances.get(i).start();
+						} catch (RemoteException e) {
+							e.printStackTrace();
+						}
+				}
+		);
+		actions.put("printP", in -> {
+			for (int i = 0; i < instances.size(); i++)
+			{
+				System.out.println("Instance: " + i);
+				try {
+					System.out.println(instances.get(i).getPhilosophersAsString());
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+			}
 		});
 	}
 
@@ -201,6 +220,30 @@ public class Controller {
 	private static void removeSeat(final List<String> args) {
 		synchronized (instanceToController) {
 			// REMOVE SEAT TODO
+			if (instanceScores.size() == 0)
+			{
+				System.err.println("remove seat failed: no instance available.");
+				return;
+			}
+			
+			int bestIndex = 0;
+			float bestScore = instanceScores.get(0);
+			for (int i = 0;  i < instanceScores.size(); i++)
+			{
+				if (bestScore > instanceScores.get(i))
+				{
+					bestScore = instanceScores.get(i);
+					bestIndex = i;
+				}
+			}
+			float score;
+			try {
+				score = instances.get(bestIndex).removeSeat();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+				return;
+			}
+			instanceScores.set(bestIndex, score);
 		}
 	}
 
