@@ -259,7 +259,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		} catch (NotBoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -276,25 +275,21 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		try
 		{
 			controller.log(tag, System.currentTimeMillis(), message);
-		
 		}
 		catch (RemoteException e)
 		{
-			// TODO
 			e.printStackTrace();
 		}
 	}
 
 	@Override
-	public synchronized float addPhilosoph(boolean hungry) {
-		// TODO Auto-generated method stub
-		
+	public synchronized float addPhilosoph(boolean hungry) {		
 		controllerLog("addPhilosoph", "adding philosoph " + hungry);
 		
 		synchronized (philosophers)
 		{
 			// TODO replace 0 with minimum eaten + some offset.
-			philosophers.add(new PhilosopherData(false, 0, this));
+			philosophers.add(new PhilosopherData(hungry, 0, this));
 		}
 		
 		controllerLog("addPhilosoph", "added philosoph " + hungry);
@@ -302,8 +297,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		return calcRatio(philosophers.size(), seats.size());
 	}
 	
-
-
 	@Override
 	public synchronized float removePhilosoph(boolean hungry) {
 		controllerLog("removePhilosoph", "removing philosoph " + hungry);
@@ -596,6 +589,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			return (float) (amountPhilosophers == 0 ? 1.0 : 1.0 / 0);
 		}
 		return ((float)amountPhilosophers) / amountSeats;
+	}
+	
+	@Override
+	public synchronized int seatCount() throws RemoteException{
+		return seats.size();
 	}
 
 	@Override

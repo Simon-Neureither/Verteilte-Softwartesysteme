@@ -9,6 +9,8 @@ import shared_interfaces.InstanceToController;
 
 public class InstanceToControllerImpl extends UnicastRemoteObject implements InstanceToController {
 	
+	private static final long serialVersionUID = 1L;
+
 	private final List<InstanceHandle> instances;
 	
 	private final List<Float> instanceScores;
@@ -23,8 +25,7 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	public synchronized void addInstance(InstanceHandle instance) throws RemoteException {
 		System.err.println("addInstance: " + instance);
 		instances.add(instance);
-		instanceScores.add((float) 1.0); // TODO what is the best score for an empty instance?
-		
+		instanceScores.add(0F);
 		
 		instances.get(instances.size() - 1).updateNext();
 		
@@ -39,7 +40,7 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 		System.err.println("removeInstance: " + instance);
 		int index = instances.indexOf(instance);
 		
-		// TODO updatenext/change fork etc..
+		instances.get(index-1).updateNext();
 		instances.remove(index);
 		instanceScores.remove(index);
 	}
@@ -47,18 +48,11 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	@Override
 	public InstanceHandle nextInstance(InstanceHandle instance) throws RemoteException {
 		int index = instances.indexOf(instance);
-		
-		// Return next in list (if any).
-		if (index + 1 < instances.size())
-			return instances.get(index + 1);
-		
-		// Return instance @0 (ring).
-		return instances.get(0);
+		return instances.get(index % instances.size());
 	}
 
 	@Override
 	public void log(String tag, long timestamp, String message) throws RemoteException {
-		// TODO Auto-generated method stub
 		System.err.println("[" + tag + "@" + timestamp + "] " + message);
 	}
 

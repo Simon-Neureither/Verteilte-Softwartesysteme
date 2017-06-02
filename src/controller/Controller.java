@@ -107,17 +107,6 @@ public class Controller {
 		}
 	}
 
-	//	private static boolean parseStringToBoolean(String string) {
-	//		boolean bool;
-	//		try {
-	//			bool = Integer.parseInt(string) != 0;
-	//		} catch (NumberFormatException e) {
-	//			bool = false;
-	//			bool = string.equalsIgnoreCase("y") || string.equalsIgnoreCase("j");
-	//		}
-	//		return bool;
-	//	}
-
 	private static void addPhilosoph(final boolean isHungry) {
 		synchronized (instanceToController) {
 			if (instanceScores.size() == 0) {
@@ -138,11 +127,8 @@ public class Controller {
 			try {
 				instanceScores.set(index, instances.get(index).addPhilosoph(isHungry));
 			} catch (RemoteException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-
-			// TODO
 		}
 	}
 
@@ -219,10 +205,19 @@ public class Controller {
 
 	private static void removeSeat(final List<String> args) {
 		synchronized (instanceToController) {
-			// REMOVE SEAT TODO
-			if (instanceScores.size() == 0)
+			if (instances.size() == 0)
 			{
 				System.err.println("remove seat failed: no instance available.");
+				return;
+			}
+			
+			try {
+				if(instances.size() == 1 & instances.get(0).seatCount() < 2){
+					System.err.println("remove seat failed: no seats would be left after deletion");
+					return;
+				}
+			} catch (RemoteException e1) {
+				e1.printStackTrace();
 				return;
 			}
 			
