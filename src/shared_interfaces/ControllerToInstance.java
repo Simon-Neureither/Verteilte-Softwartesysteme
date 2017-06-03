@@ -3,6 +3,8 @@ package shared_interfaces;
 import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.util.List;
+import java.util.Map;
 
 public interface ControllerToInstance extends Remote, Serializable {
 	
@@ -14,11 +16,10 @@ public interface ControllerToInstance extends Remote, Serializable {
 	float addSeat() throws RemoteException;
 	float removeSeat() throws RemoteException;
 	
-	void updateNext() throws RemoteException;
-	
+	void updateNeighbours(final List<InstanceHandle> neighbours) throws RemoteException;
+		
 	void start() throws RemoteException;
 	void stop() throws RemoteException;
-	void exit() throws RemoteException;
 
 	int seatCount() throws RemoteException;
 	String debug_getSeatsAsString() throws RemoteException;

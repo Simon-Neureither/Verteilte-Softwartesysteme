@@ -9,7 +9,11 @@ import java.rmi.registry.Registry;
 import java.rmi.server.RemoteObject;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.Semaphore;
 
 import shared_interfaces.ControllerToInstance;
@@ -19,11 +23,15 @@ import shared_interfaces.InstanceToInstance;
 
 public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
-	// Set if the instance was in one time the first instance.
-	// Used to determine the lock order for the first seat.
-	// So that no deadlock can occur.
-	private boolean instanceWasLonely = false;
-		
+	/** List of all instances (in the right order). */
+	private final List<InstanceHandle> neighbours = new ArrayList<>();
+	/** Snapshot of each instance. */
+	private final Map<InstanceHandle, SnapshotEntry> snapshots = new HashMap<>();
+	/** Index of this instance in the neighbour list. */
+	private int neighbourIndex = -1;
+	/** Keeps snapshots up to date. */
+	private SnapshotUpdater updater;
+	
 	/**
 	 * Semaphore to lock 'hadSeatWhileLocked'.
 	 */
@@ -96,7 +104,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			{
 				try
 				{
-					nextInstance.freeNext(Instance.this);
+					//TODO error if neibours is not up to date / empty
+					neighbours.get(neighbourIndex+1).freeFirst(Instance.this);
 				}
 				catch (RemoteException e)
 				{
@@ -116,7 +125,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			if (fork2 == null)
 			{
 				try {
-					nextInstance.lockNext(Instance.this);
+					neighbours.get(neighbourIndex+1).lockFirst(Instance.this);
 				} catch (RemoteException e) {
 					return false;
 				}
@@ -164,8 +173,14 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		 */
 		public void releaseForks()
 		{
-			release1();
-			release2();
+			if(neighbourIndex == -1){
+				//TODO actual error prevention
+				System.err.println("List of neighbours not up to date");
+				return;
+			}else{						
+				release1();
+				release2();
+			}
 		}
 		
 		/**
@@ -220,13 +235,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			return fork2;
 		}
 	}
-
 	
 	private Semaphore leftFork = new Semaphore(0);
 	private Semaphore rightFork = new Semaphore(0);
 		
 	private String controllerAddress;
-	private Registry registry;
 	
 	private InstanceToController controller;
 	
@@ -234,13 +247,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private List<Seat> seats = new ArrayList<Seat>();
 	
 	private boolean hasStarted = false;
-	
-	private InstanceHandle nextInstance;
-	
+		
 	private Instance(String controllerAddress) throws RemoteException, NotBoundException
 	{
 		this.controllerAddress = controllerAddress;
-		registry = LocateRegistry.getRegistry(controllerAddress);
+		final Registry registry = LocateRegistry.getRegistry(controllerAddress);
 		controller = (InstanceToController) registry.lookup("controller");
 		controller.addInstance(this);
 	}
@@ -279,6 +290,24 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		{
 			e.printStackTrace();
 		}
+	}
+	
+	public Map<InstanceHandle, SnapshotEntry> getSnapshots(){
+		return snapshots;
+	}
+	
+	public List<InstanceHandle> getNeighbours(){
+		return neighbours;
+	}
+	
+	public int getFreeSeats(){
+		//TODO
+		return 0;
+	}
+	
+	public int getEatCount(){
+		//TODO
+		return 0;
 	}
 
 	@Override
@@ -332,7 +361,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		if (seats.size() == 0)
 		{
 			// No seat...
-			seat.setLockOrder(instanceWasLonely); // Only one instance may start with this flag set.
+			seat.setLockOrder(neighbourIndex == 0); // Only one instance may start with this flag set.
 			seat.setFork1(leftFork);
 		}
 		else
@@ -410,35 +439,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public synchronized void updateNext() throws RemoteException  {
-		
-		// TODO
-		// Since it is not required to handle changing instances,
-		// there is no handling of philosophers eating at the last seat
-		// while adding a new instance.
-		nextInstance = controller.nextInstance(this);
-		
-		if (this.equals(nextInstance))
-		{
-			System.out.println("this instance is lonely");
-			
-			instanceWasLonely = true;
-		}
-		else
-		{
-			System.out.println("this instance has a 'real' next");
-			
-			// Update the last seat.
-			if (seats.size() > 0)
-			{
-				seats.get(seats.size() - 1).setFork2(null);
-			}
-		}
-		
-		controllerLog("updateNext", "updated next to: " + nextInstance);
-	}
-
-	@Override
 	public synchronized void start() {
 		try {
 			controller.log(this.toString(), System.currentTimeMillis(), "starting instance");
@@ -447,6 +447,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 		if (!hasStarted)
 		{
+			updater = new SnapshotUpdater(this);
+			updater.start();
+			updater.waitForFirstIteration();
 			for (int i = 0; i < philosophers.size(); i++)
 			{
 				philosophers.get(i).start();
@@ -470,6 +473,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 		if (hasStarted)
 		{
+			updater.stopThread();
 			for (int i = 0; i < philosophers.size(); i++)
 			{
 				philosophers.get(i).stop();
@@ -485,16 +489,19 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public void exit() {
-		// stop all philosophs (active threads)
-		philosophers.parallelStream().forEach(PhilosopherData::stop);
-		// link to this remote object will be redirected by the controller
-	}
-	
-	@Override
-	public InstanceToInstance getAvailable(InstanceHandle self) {
-		//TODO
-		return null;
+	public SnapshotEntry checkAvailable(final InstanceHandle neighbour, final int freeSeats, final int eatCount) throws RemoteException {
+		synchronized(neighbour){			
+			final SnapshotEntry entry = snapshots.get(neighbour);
+			entry.freeSeats = freeSeats;
+			entry.eatCount = eatCount;
+			entry.lastUpdated = System.currentTimeMillis();
+		}
+		
+		final SnapshotEntry result = new SnapshotEntry();
+		result.freeSeats = getFreeSeats();
+		result.eatCount = getEatCount();
+		
+		return result;
 	}
 
 	@Override
@@ -510,7 +517,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public void lockNext(InstanceHandle handle) throws RemoteException {
+	public void lockFirst(InstanceHandle handle) throws RemoteException {
 		// TODO cycle.		
 		prevSeatSemaphore.acquireUninterruptibly();
 		hasSeatsSemaphore.acquireUninterruptibly();
@@ -524,7 +531,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		{
 			if (hasSeats)
 			{
-				nextInstance.lockNext(this);
+				//TODO error if neibours is not up to date / empty
+				neighbours.get(neighbourIndex+1).lockFirst(this);
 				hadSeatWhileLocked = true;
 			}
 			else
@@ -540,7 +548,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 	
 	@Override
-	public void freeNext(InstanceHandle handle) throws RemoteException {
+	public void freeFirst(InstanceHandle handle) throws RemoteException {
 		// TODO cycle.
 	
 		prevSeatSemaphore.acquireUninterruptibly();
@@ -556,7 +564,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 		else
 		{
-			nextInstance.lockNext(this);
+			//TODO error if neibours is not up to date / empty
+			neighbours.get(neighbourIndex+1).lockFirst(this);
 		}
 		prevSeatSemaphore.release();
 	}
@@ -611,4 +620,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 		return str;
 	}
+
+	@Override
+	public void updateNeighbours(List<InstanceHandle> neighbours) throws RemoteException {
+		this.neighbours.clear();
+		neighbours.addAll(neighbours);
+		neighbourIndex = neighbours.indexOf(this);
+	}
+	
 }

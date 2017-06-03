@@ -9,8 +9,6 @@ import shared_interfaces.InstanceToController;
 
 public class InstanceToControllerImpl extends UnicastRemoteObject implements InstanceToController {
 	
-	private static final long serialVersionUID = 1L;
-
 	private final List<InstanceHandle> instances;
 	
 	private final List<Float> instanceScores;
@@ -23,32 +21,29 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	
 	@Override
 	public synchronized void addInstance(InstanceHandle instance) throws RemoteException {
-		System.err.println("addInstance: " + instance);
+		instances.forEach(inst -> {
+			try {
+				inst.updateNeighbours(instances);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		});
 		instances.add(instance);
 		instanceScores.add(0F);
-		
-		instances.get(instances.size() - 1).updateNext();
-		
-		if (instances.size() != 1)
-		{
-			instances.get(instances.size() - 2).updateNext();
-		}
 	}
 
 	@Override
 	public synchronized void removeInstance(InstanceHandle instance) throws RemoteException {
-		System.err.println("removeInstance: " + instance);
 		int index = instances.indexOf(instance);
-		
-		instances.get(index-1).updateNext();
 		instances.remove(index);
+		instances.forEach(inst -> {
+			try {
+				inst.updateNeighbours(instances);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		});
 		instanceScores.remove(index);
-	}
-
-	@Override
-	public InstanceHandle nextInstance(InstanceHandle instance) throws RemoteException {
-		int index = instances.indexOf(instance);
-		return instances.get(index % instances.size());
 	}
 
 	@Override

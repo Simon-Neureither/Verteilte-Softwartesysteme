@@ -204,33 +204,30 @@ public class Controller {
 	}
 
 	private static void removeSeat(final List<String> args) {
-		synchronized (instanceToController) {
-			if (instances.size() == 0)
-			{
-				System.err.println("remove seat failed: no instance available.");
-				return;
-			}
-			
-			try {
-				if(instances.size() == 1 & instances.get(0).seatCount() < 2){
-					System.err.println("remove seat failed: no seats would be left after deletion");
+		synchronized (instanceToController) {		
+			int allAvailableSeats = 0;
+			int bestIndex = 0;
+			float bestScore = 0;
+			for(int index = 0; index < instances.size(); index++){
+				try {
+					allAvailableSeats += instances.get(index).seatCount();
+				} catch (RemoteException e) {
+					e.printStackTrace();
 					return;
 				}
-			} catch (RemoteException e1) {
-				e1.printStackTrace();
+				
+				if (bestScore > instanceScores.get(index))
+				{
+					bestScore = instanceScores.get(index);
+					bestIndex = index;
+				}
+			}
+			
+			if (allAvailableSeats <= 1){
+				System.err.println("remove seat failed: no instance or extra seat available.");
 				return;
 			}
 			
-			int bestIndex = 0;
-			float bestScore = instanceScores.get(0);
-			for (int i = 0;  i < instanceScores.size(); i++)
-			{
-				if (bestScore > instanceScores.get(i))
-				{
-					bestScore = instanceScores.get(i);
-					bestIndex = i;
-				}
-			}
 			float score;
 			try {
 				score = instances.get(bestIndex).removeSeat();
