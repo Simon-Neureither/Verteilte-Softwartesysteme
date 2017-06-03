@@ -6,7 +6,6 @@ import java.rmi.RemoteException;
 
 public interface ControllerToInstance extends Remote, Serializable {
 	
-	
 	// Controller to Instance
 	// Rueckgabewert = Verhaeltnis Philosoph / Seat
 	float addPhilosoph(boolean hungry) throws RemoteException;

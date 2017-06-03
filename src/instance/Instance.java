@@ -84,10 +84,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			fork1.acquireUninterruptibly();
 			return true;
 		}
+		
 		private void release1()
 		{
 			fork1.release();
 		}
+		
 		private void release2()
 		{
 			if (fork2 == null)
@@ -125,8 +127,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			}
 			return true;
 		}
-		
-		
+				
 		/**
 		 * Locks the forks.
 		 * @return true if successful, false if not (false only if RemoteException occured).
@@ -156,8 +157,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 					release2();
 				return true;
 			}
-		}
-		
+		}	
 		
 		/**
 		 * Releases forks.
@@ -224,7 +224,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
 	private Semaphore leftFork = new Semaphore(0);
 	private Semaphore rightFork = new Semaphore(0);
-	
 		
 	private String controllerAddress;
 	private Registry registry;
@@ -294,7 +293,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		controllerLog("addPhilosoph", "added philosoph " + hungry);
 		
-		return calcRatio(philosophers.size(), seats.size());
+		return calcDensity(philosophers.size(), seats.size());
 	}
 	
 	@Override
@@ -321,7 +320,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		controllerLog("removePhilosoph", "removed philosoph " + hungry + " removed: " + (removed ? "YES" : "NO"));
 
-		return calcRatio(philosophers.size(), seats.size());
+		return calcDensity(philosophers.size(), seats.size());
 	}
 
 	@Override
@@ -359,7 +358,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		seats.add(seat);
 		hasSeatsSemaphore.release();
 		
-		return calcRatio(philosophers.size(), seats.size());
+		return calcDensity(philosophers.size(), seats.size());
 	}
 
 	@Override
@@ -387,7 +386,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				prevSeat.lockSeat();
 				
 				// Null means use fork of next instance.
-				// TODO what if there is no instance with a seat but this?
 				prevSeat.setFork2(null);
 				
 				prevSeat.releaseSeat();
@@ -408,7 +406,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				hasSeatsSemaphore.release();
 			}
 		}
-		return calcRatio(philosophers.size(), seats.size());
+		return calcDensity(philosophers.size(), seats.size());
 	}
 
 	@Override
@@ -488,14 +486,14 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	@Override
 	public void exit() {
-		// TODO Auto-generated method stub
-		
+		// stop all philosophs (active threads)
+		philosophers.parallelStream().forEach(PhilosopherData::stop);
+		// link to this remote object will be redirected by the controller
 	}
 	
 	@Override
 	public InstanceToInstance getAvailable(InstanceHandle self) {
-				
-		
+		//TODO
 		return null;
 	}
 
@@ -582,7 +580,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 * @param amountSeats
 	 * @return
 	 */
-	private float calcRatio(int amountPhilosophers, int amountSeats)
+	private float calcDensity(int amountPhilosophers, int amountSeats)
 	{
 		if (amountSeats == 0)
 		{
