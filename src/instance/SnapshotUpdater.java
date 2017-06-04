@@ -42,8 +42,8 @@ public class SnapshotUpdater extends Thread {
 		.filter(inst -> !caller.areInstancesEqual(inst))
 		.forEach(inst -> {
 			try {
-				caller.getSnapshots().put(inst, inst.checkAvailable(
-						caller, 
+				caller.getSnapshots().put(caller.getUniqueIDOfHandle(inst), inst.checkAvailable(
+						caller.getUniqueIDLocal(), 
 						caller.getFreeSeats(), 
 						caller.getEatCount()));
 			} catch (RemoteException e) {
@@ -75,7 +75,7 @@ public class SnapshotUpdater extends Thread {
 			.filter(entry -> !caller.areInstancesEqual(entry.getKey()))
 			.forEach(entry -> {
 				try {
-					SnapshotEntry snapshotEntry = entry.getKey().checkAvailable(caller, freeSeats, eatCount);
+					SnapshotEntry snapshotEntry = caller.getInstanceByID(entry.getKey()).checkAvailable(caller.getUniqueIDLocal(), freeSeats, eatCount);
 					entry.setValue(snapshotEntry);
 					caller.updateEaten(entry.getKey(), snapshotEntry.eatCount);
 				} catch (RemoteException e) {

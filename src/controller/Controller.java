@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.function.Consumer;
 
+import javax.swing.plaf.SliderUI;
+
 import shared_interfaces.InstanceHandle;
 import shared_interfaces.InstanceToController;
 
@@ -52,6 +54,83 @@ public class Controller {
 		actions.put("stop", in -> Controller.stop());
 		
 		actions.put("printP", in -> Controller.printP());
+		
+		actions.put("t", in -> Controller.testCase1());
+		actions.put("t4", in -> Controller.testCase4Instances());
+		
+		actions.put("pI", in -> Controller.printInstances());
+	}
+	
+	private static void printInstances()
+	{
+		for (int i = 0; i < instances.size(); i++)
+		{
+			try {
+				System.out.println(i + ": " + instances.get(i).toString2());
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void testCase1()
+	{
+		try
+		{
+			instances.get(0).addPhilosoph(false);
+			instances.get(0).addSeat();
+		//	instances.get(1).addSeat();
+
+			start();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	private static void testCase4Instances()
+	{
+		try
+		{
+			instances.get(0).addPhilosoph(true);
+			instances.get(0).addPhilosoph(true);
+			instances.get(0).addPhilosoph(true);
+			
+			
+			
+			for (int i = 0; i < 4; i++)
+			{
+				instances.get(i).addPhilosoph(false);
+				instances.get(i).addPhilosoph(false);
+				instances.get(i).addPhilosoph(false);
+				
+			}
+			
+			
+			instances.get(0).addSeat();
+			instances.get(1).addSeat();
+			instances.get(2).addSeat();
+			instances.get(3).addSeat();
+			instances.get(3).addSeat();
+			instances.get(3).addSeat();
+			
+			printInstances();
+			
+			start();
+			
+			Thread.sleep(60000);
+			
+			stop();
+			
+			printInstances();
+			printP();
+			
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
 	}
 	
 	private static void printP()
@@ -69,6 +148,14 @@ public class Controller {
 	
 	private static void start()
 	{
+		instances.forEach(inst -> {
+			try {
+				inst.updateNeighbours(instances);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		});
+		
 		for (int i = 0; i < instances.size(); i++)
 			try {
 				instances.get(i).start();

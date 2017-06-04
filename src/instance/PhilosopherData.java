@@ -121,14 +121,10 @@ public class PhilosopherData {
 			HandleSeatPair pair = instance.getSeatForLocals();
 			long waitEnd = System.currentTimeMillis();
 			waited += waitEnd - waitStart;
-			
 			if (pair.seatIndex == Instance.NO_INSTANCE_HAS_A_SEAT)
 			{
 				return;
 			}
-			
-			System.err.println("I TOOK SEAT: " + pair.seatIndex);
-			
 			eaten++;
 			instance.updateEaten(this, eaten);
 			instance.releaseHandleSatPair(pair);

@@ -28,14 +28,6 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	public synchronized int addInstance(InstanceHandle instance) throws RemoteException {
 		instances.add(instance);
 		instanceScores.add(0F);
-		instances.forEach(inst -> {
-			try {
-				inst.updateNeighbours(instances);
-			} catch (RemoteException e) {
-				e.printStackTrace();
-			}
-		});
-		
 		return uniqueID++;
 	}
 

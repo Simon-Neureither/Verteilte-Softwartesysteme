@@ -1,23 +1,17 @@
 package instance;
 
-import java.rmi.NoSuchObjectException;
 import java.rmi.NotBoundException;
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.RemoteObject;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
 
-import shared_interfaces.ControllerToInstance;
 import shared_interfaces.InstanceHandle;
 import shared_interfaces.InstanceToController;
 import shared_interfaces.InstanceToInstance;
@@ -35,7 +29,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	/** List of all instances (in the right order). */
 	private final List<InstanceHandle> neighbours = new ArrayList<>();
 	/** Snapshot of each instance. */
-	private final Map<InstanceHandle, SnapshotEntry> snapshots = new HashMap<>();
+	private final Map<Integer, SnapshotEntry> snapshots = new HashMap<>();
 	/** Index of this instance in the neighbour list. */
 	private int neighbourIndex = -1;
 	/** Keeps snapshots up to date. */
@@ -125,7 +119,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				else
 				{
 					try {
-						neighbours.get((neighbourIndex + 1) % neighbours.size()).freeFirst(Instance.this);
+						neighbours.get((neighbourIndex + 1) % neighbours.size()).freeFirst(Instance.this.uniqueID);
 					} catch (RemoteException e) {
 						e.printStackTrace();
 					}
@@ -142,7 +136,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			if (fork2 == null)
 			{
 				try {
-					neighbours.get((neighbourIndex + 1) % neighbours.size()).lockFirst(Instance.this);
+					neighbours.get((neighbourIndex + 1) % neighbours.size()).lockFirst(Instance.this.uniqueID);
 				} catch (RemoteException e) {
 					return false;
 				}
@@ -272,7 +266,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		this.controllerAddress = controllerAddress;
 		final Registry registry = LocateRegistry.getRegistry(controllerAddress);
 		controller = (InstanceToController) registry.lookup("controller");
-		uniqueID = controller.addInstance(this);
+		synchronized (this)
+		{
+			uniqueID = controller.addInstance(this);
+		}
+		System.err.println("INSTANCE UNIQUEID: " + uniqueID);
 	}
 	
 	public static void main(String...args)
@@ -292,6 +290,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 	}
 	
+	
+	/** Ignored debug tags. */
+	private static List<String> ignoredTags = new ArrayList<String>();
+	
+	static
+	{
+		ignoredTags.add("freeFirst");
+		ignoredTags.add("lockFirst");
+		ignoredTags.add("addPhilosoph");
+		ignoredTags.add("updateNeighbours");
+	}
+	
 	/**
 	 * Simplifies controller log message calls.
 	 * @param tag
@@ -299,8 +309,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 */
 	private void controllerLog(String tag, String message)
 	{
+		
+		if (ignoredTags.contains(tag))
+			return;
+		
 		tag += this.hashCode();
-		System.out.println("[" + tag + "] " + message);
+		System.out.println("[" + uniqueID + "][" + tag + "] " + message);
 		try
 		{
 			controller.log(tag, System.currentTimeMillis(), message);
@@ -311,7 +325,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 	}
 	
-	public Map<InstanceHandle, SnapshotEntry> getSnapshots(){
+	public Map<Integer, SnapshotEntry> getSnapshots(){
 		return snapshots;
 	}
 	
@@ -323,7 +337,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		int count  = 0;
 		for (int i = 0; i < seats.size(); i++)
 		{
-			// TODO availablePermits should work since it is just a snapshot, not sure.
 			seats.get(i).seatLock.availablePermits();
 			count++;
 		}
@@ -340,8 +353,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		synchronized (philosophers)
 		{
-			// TODO replace 0 with minimum eaten + some offset.
+			// TODO use second line (first is for testing).
 			philosophers.add(new PhilosopherData(hungry, 0, this));
+		//	philosophers.add(new PhilosopherData(hungry, eatCount, this));
+			
+			if (hasStarted)
+				philosophers.get(philosophers.size() - 1).start();
 		}
 		
 		controllerLog("addPhilosoph", "added philosoph " + hungry);
@@ -385,7 +402,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		if (seats.size() == 0)
 		{
 			// No seat...
-			seat.setLockOrder(neighbourIndex == 0); // Only one instance may start with this flag set.
+			seat.setLockOrder(uniqueID == 0); // Only one instance may start with this flag set.
 			seat.setFork1(leftFork);
 		}
 		else
@@ -511,8 +528,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public SnapshotEntry checkAvailable(final InstanceHandle neighbour, final int freeSeats, final int eatCount) throws RemoteException {
-		synchronized(neighbour){			
+	public SnapshotEntry checkAvailable(final int neighbour, final int freeSeats, final int eatCount) throws RemoteException {
+		InstanceToInstance instance = getInstanceByID(neighbour);
+		
+		synchronized(instance){
+			
 			SnapshotEntry entry = snapshots.get(neighbour);
 			if (entry == null)
 			{
@@ -599,7 +619,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				continue;
 			
 			try {
-				index = neighbours.get(i).getSeat(this);
+				index = neighbours.get(i).getSeat(uniqueID);
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				index = NO_SEAT_AVAILABLE;
@@ -632,9 +652,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			if (index < 0)
 			{
 				// No seat available/free.
-				List<InstanceHandle> handlesWithFreeSeats = new ArrayList<InstanceHandle>();
+				List<Integer> handlesWithFreeSeats = new ArrayList<Integer>();
 				
-				for (Entry<InstanceHandle, SnapshotEntry> e : snapshots.entrySet())
+				for (Entry<Integer, SnapshotEntry> e : snapshots.entrySet())
 				{
 					if (e.getValue().freeSeats > 0)
 						handlesWithFreeSeats.add(e.getKey());
@@ -655,11 +675,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 					}
 				}
 				
-				InstanceHandle instance = handlesWithFreeSeats.get((int)(Math.random() * handlesWithFreeSeats.size()));
+				InstanceHandle instance = neighbours.get(handlesWithFreeSeats.get((int)(Math.random() * handlesWithFreeSeats.size())));
 				
 				try
 				{
-				index = instance.getSeat(this);
+				index = instance.getSeat(uniqueID);
 				} catch (RemoteException e)
 				{
 					continue;
@@ -702,7 +722,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 * @return NO_SEAT_AVAILABLE if no seat is was found in this instance OR a valid index.
 	 */
 	@Override
-	public int getSeat(InstanceHandle instance) {
+	public int getSeat(int ID) {
 		if (seats.size() == 0)
 		{
 			return NO_SEAT_AVAILABLE;
@@ -758,58 +778,57 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 
 	@Override
-	public void lockFirst(InstanceHandle handle) throws RemoteException {
-		// TODO cycle.		
+	public void lockFirst(int ID) throws RemoteException {
 		prevSeatSemaphore.acquireUninterruptibly();
 		hasSeatsSemaphore.acquireUninterruptibly();
 		
-		if (!hadMoreThanOneSeatWhileLocked && this.areInstancesEqual(handle))
+		controllerLog("lockFirst", uniqueID + " initial caller: " + ID);
+		
+		if (areInstancesEqual(ID))
 		{
-			// It's the only seat in the whole system.
-			controllerLog("lockFirst", "lock self");
+			controllerLog("lockFirst", "rightFork");
 			rightFork.acquireUninterruptibly();
+		}
+		else if (hasSeats)
+		{
+			hadSeatWhileLocked = true;
+			controllerLog("lockFirst", "leftFork");
+			leftFork.acquireUninterruptibly();
 		}
 		else
 		{
-			if (hasSeats)
-			{
-				//TODO error if neihbours is not up to date / empty
-				neighbours.get(neighbourIndex+1).lockFirst(handle);
-				hadSeatWhileLocked = true;
-			}
-			else
-			{
-				leftFork.acquireUninterruptibly();
-				hadSeatWhileLocked = false;
-			}
+			hadSeatWhileLocked = false;
+			controllerLog("lockFirst", "nextFork hadNoSeats -> redirecting call to : " + ((neighbourIndex + 1) % neighbours.size()));
+			neighbours.get((neighbourIndex + 1) % neighbours.size()).lockFirst(ID);
 		}
+		
+		controllerLog("lockFirst", "end of lock first reached.");
 		
 		hasSeatsSemaphore.release();
 		prevSeatSemaphore.release();
-		
 	}
 	
 	@Override
-	public void freeFirst(InstanceHandle handle) throws RemoteException {
+	public void freeFirst(int ID) throws RemoteException {
 		// TODO cycle.
-	
 		prevSeatSemaphore.acquireUninterruptibly();
-		
-		if (!hadMoreThanOneSeatWhileLocked && areInstancesEqual(neighbours.get(neighbourIndex), handle))
+				
+		if (areInstancesEqual(ID))
 		{
-			controllerLog("freeFirst", "free self");
-			// It was the only seat ever.
+			controllerLog("freeFirst", "rightFork");
 			rightFork.release();
 		}
 		else if (hadSeatWhileLocked)
 		{
+			controllerLog("freeFirst", "leftFork");
 			leftFork.release();
 		}
 		else
 		{
-			//TODO error if neibours is not up to date / empty
-			neighbours.get((neighbourIndex+1) % neighbours.size()).freeFirst(this);
+			controllerLog("freeFirst", "nextFork");
+			neighbours.get((neighbourIndex + 1) % neighbours.size()).freeFirst(ID);
 		}
+		
 		prevSeatSemaphore.release();
 	}
 	
@@ -855,22 +874,23 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	@Override
 	public void updateNeighbours(List<InstanceHandle> neighbours) throws RemoteException {
-		controllerLog("updateNeighbours", "#" + neighbours.size());
 		this.neighbours.clear();
 		this.neighbours.addAll(neighbours);
+		
 		for (int i = 0; i < neighbours.size(); i++)
 		{
+			handles.put(neighbours.get(i), neighbours.get(i).getUniqueID());
 			if (areInstancesEqual(neighbours.get(i)))
 			{
-				
 				neighbourIndex = i;
-				break;
+				controllerLog("updateNeighbours", "Neighbour ID of instance " + getUniqueIDLocal()  + " " + uniqueID + " set to: " + i);
 			}
+			
 		}
 	}
 
 	public void updateEaten(Object trigger, int eaten) {
-		if (eatCount < eaten || eatCountLastUpdater == trigger || eatCountLastUpdater == null)
+		if (eatCount > eaten || eatCountLastUpdater == trigger || eatCountLastUpdater == null)
 		{
 			eatCount = eaten;
 			eatCountLastUpdater = trigger;
@@ -879,43 +899,45 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
 	private Map<InstanceHandle, Integer> handles = new HashMap<InstanceHandle, Integer>();
 	
+	
+	public boolean areInstancesEqual(int ID)
+	{
+		return uniqueID == ID;
+	}
+	
 	public boolean areInstancesEqual(InstanceHandle handle)
 	{
-		if (handles.get(handle) == null)
-		{
-			try {
-				handles.put(handle, handle.getUniqueID());
-			} catch (RemoteException e) {
-				e.printStackTrace();
-			}
-		}
 		return uniqueID == handles.get(handle);
 	}
-
-	private boolean areInstancesEqual(InstanceHandle handle, InstanceHandle handle2) {
-		if (handles.get(handle) == null)
-		{
-			try {
-				handles.put(handle, handle.getUniqueID());
-			} catch (RemoteException e) {
-				e.printStackTrace();
-			}
-		}
-		if (handles.get(handle2) == null)
-		{
-			try {
-				handles.put(handle2, handle2.getUniqueID());
-			} catch (RemoteException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		return handles.get(handle) == handles.get(handle2);
-	}
-
+	
 	@Override
 	public int getUniqueID() throws RemoteException {
 		return uniqueID;
+	}
+	
+	public int getUniqueIDLocal()
+	{
+		return uniqueID;
+	}
+
+	public Integer getUniqueIDOfHandle(InstanceHandle inst) {
+		return handles.get(inst);
+	}
+
+	public InstanceToInstance getInstanceByID(Integer key) {
+		
+		for (Entry<InstanceHandle, Integer> e : handles.entrySet())
+		{
+			if (e.getValue().equals(key))
+				return e.getKey();
+		}
+		return null;
+	}
+	
+	@Override
+	public String toString2() throws RemoteException
+	{
+		return "Instance: s: " + seats.size() + " p:" + philosophers.size() + " uID:" + uniqueID + " leftFork: " + leftFork.availablePermits() + " rightFork: " + rightFork.availablePermits() + " eatCount: " + eatCount;
 	}
 	
 }

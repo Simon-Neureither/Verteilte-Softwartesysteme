@@ -24,4 +24,7 @@ public interface ControllerToInstance extends Remote, Serializable {
 	int seatCount() throws RemoteException;
 	String debug_getSeatsAsString() throws RemoteException;
 	String getPhilosophersAsString() throws RemoteException;
+	
+	String toString2() throws RemoteException;
+
 }
