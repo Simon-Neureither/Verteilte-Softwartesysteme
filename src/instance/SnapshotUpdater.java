@@ -1,6 +1,9 @@
 package instance;
 
+import java.rmi.NoSuchObjectException;
 import java.rmi.RemoteException;
+
+import shared_interfaces.InstanceToInstance;
 
 public class SnapshotUpdater extends Thread {
 
@@ -9,6 +12,7 @@ public class SnapshotUpdater extends Thread {
 	private static final long EXPIRE_TIME = 3000;
 
 	private final Instance caller;
+	private final InstanceToInstance callerStub;
 
 	private boolean stopped;
 
@@ -16,14 +20,26 @@ public class SnapshotUpdater extends Thread {
 
 	SnapshotUpdater(final Instance caller){
 		this.caller = caller;
+		
+		InstanceToInstance dummy;
+		
+		try {
+			dummy = (InstanceToInstance) caller.toStub(caller);
+		} catch (NoSuchObjectException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			dummy = null;
+		}
+		
+		callerStub = dummy;
 	}
 
 	@Override
 	public void run() {
-
+				
 		// instantiate snapshots
 		caller.getNeighbours().parallelStream()
-		.filter(inst -> inst != caller)
+		.filter(inst -> !caller.areInstancesEqual(inst))
 		.forEach(inst -> {
 			try {
 				caller.getSnapshots().put(inst, inst.checkAvailable(
@@ -56,10 +72,12 @@ public class SnapshotUpdater extends Thread {
 
 			caller.getSnapshots().entrySet().parallelStream()
 			.filter(entry -> currentTime - entry.getValue().lastUpdated > EXPIRE_TIME)
-			.filter(entry -> entry.getKey() != caller)
+			.filter(entry -> !caller.areInstancesEqual(entry.getKey()))
 			.forEach(entry -> {
 				try {
-					entry.setValue(entry.getKey().checkAvailable(caller, freeSeats, eatCount));
+					SnapshotEntry snapshotEntry = entry.getKey().checkAvailable(caller, freeSeats, eatCount);
+					entry.setValue(snapshotEntry);
+					caller.updateEaten(entry.getKey(), snapshotEntry.eatCount);
 				} catch (RemoteException e) {
 					e.printStackTrace();
 				}

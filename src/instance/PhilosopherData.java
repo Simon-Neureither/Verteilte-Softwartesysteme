@@ -4,10 +4,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import instance.Instance.HandleSeatPair;
+
 public class PhilosopherData {
 
 	private boolean m_isHungry;
 	final private List<State> dailyRoutine;
+	
+	private int debug_eatDenied = 0;
 	
 	private Instance instance;
 
@@ -102,6 +106,32 @@ public class PhilosopherData {
 	
 	public String toString()
 	{
-		return "Philosopher: hungry: " + m_isHungry + " : eaten: " + eaten + " : eatenOffset: " + eatenOffset;
+		return "Philosopher: hungry: " + m_isHungry + " : eaten: " + eaten + " : eatenOffset: " + eatenOffset + " : waited: " + waited + " eatDenied: " + debug_eatDenied;
+	}
+
+	public void eat() {
+		if (getEaten() > instance.getEatCount() + 10)
+		{
+			debug_eatDenied++;
+			return;
+		}
+		else
+		{
+			long waitStart = System.currentTimeMillis();
+			HandleSeatPair pair = instance.getSeatForLocals();
+			long waitEnd = System.currentTimeMillis();
+			waited += waitEnd - waitStart;
+			
+			if (pair.seatIndex == Instance.NO_INSTANCE_HAS_A_SEAT)
+			{
+				return;
+			}
+			
+			System.err.println("I TOOK SEAT: " + pair.seatIndex);
+			
+			eaten++;
+			instance.updateEaten(this, eaten);
+			instance.releaseHandleSatPair(pair);
+		}
 	}
 }

@@ -45,37 +45,48 @@ public class Controller {
 		
 		actions.put("ip", args -> System.out.println(Controller.localIP));
 		
-		actions.put("debug_printSeats", in -> {for (int i = 0; i < instances.size(); i++)
+		actions.put("debug_printSeats", in -> Controller.debug_printSeats());
+		
+		actions.put("start", in -> Controller.start());
+		
+		actions.put("stop", in -> Controller.stop());
+		
+		actions.put("printP", in -> Controller.printP());
+	}
+	
+	private static void printP()
+	{
+		for (int i = 0; i < instances.size(); i++)
+		{
+			System.out.println("Instance: " + i);
 			try {
-				System.out.println("Instance: " + i + ": " + instances.get(i).debug_getSeatsAsString());
+				System.out.println(instances.get(i).getPhilosophersAsString());
 			} catch (RemoteException e) {
 				e.printStackTrace();
 			}
-		});
-		
-		actions.put("start", in ->
-				{
-					for (int i = 0; i < instances.size(); i++)
-						try {
-							instances.get(i).start();
-						} catch (RemoteException e) {
-							e.printStackTrace();
-						}
-				}
-		);
-		actions.put("printP", in -> {
-			for (int i = 0; i < instances.size(); i++)
-			{
-				System.out.println("Instance: " + i);
-				try {
-					System.out.println(instances.get(i).getPhilosophersAsString());
-				} catch (RemoteException e) {
-					e.printStackTrace();
-				}
-			}
-		});
+		}
 	}
-
+	
+	private static void start()
+	{
+		for (int i = 0; i < instances.size(); i++)
+			try {
+				instances.get(i).start();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+	}
+	
+	private static void stop()
+	{
+		for (int i = 0; i < instances.size(); i++)
+			try {
+				instances.get(i).stop();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+	}
+	
 	public static void main(String... args) {
 		if (args.length < 1) {
 			System.err.println("Need ip.");
@@ -237,6 +248,16 @@ public class Controller {
 			}
 			instanceScores.set(bestIndex, score);
 		}
+	}
+
+	private static void debug_printSeats()
+	{
+		for (int i = 0; i < instances.size(); i++)
+			try {
+				System.out.println("Instance: " + i + ": " + instances.get(i).debug_getSeatsAsString());
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
 	}
 
 }

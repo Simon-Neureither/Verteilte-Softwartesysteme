@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
 
 import shared_interfaces.ControllerToInstance;
@@ -22,6 +23,14 @@ import shared_interfaces.InstanceToController;
 import shared_interfaces.InstanceToInstance;
 
 public class Instance extends UnicastRemoteObject implements InstanceHandle {
+	
+	/** Returncode for getSeat if the instance has no seats. */
+	final public static int NO_SEAT_AVAILABLE = -1;
+	/** Returncode for getSeatLocal if no free seat was found. */
+	final public static int NO_SEAT_FREE = -2;
+	
+	/** Returncode for getSeatForLocals if no instance has a seat. */
+	final public static int NO_INSTANCE_HAS_A_SEAT = -3;
 	
 	/** List of all instances (in the right order). */
 	private final List<InstanceHandle> neighbours = new ArrayList<>();
@@ -52,6 +61,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private boolean hasSeats = false;
 	
 	private boolean hasMoreThanOneSeat = false;
+	
+	
+	/** Eat count. */
+	private int eatCount = 0;
+	/** Last philosopher or Snapshot that updated it. */
+	private Object eatCountLastUpdater = null;
 	
 	/**
 	 * Class to represent a seat, it contains two forks.
@@ -102,16 +117,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		{
 			if (fork2 == null)
 			{
-				try
+				if (neighbours.size() == 1)
 				{
-					//TODO error if neibours is not up to date / empty
-					neighbours.get(neighbourIndex+1).freeFirst(Instance.this);
+					// Only one instance, this.
+					rightFork.release();
 				}
-				catch (RemoteException e)
+				else
 				{
-					// TODO critical error
-					System.err.println("CRITICAL ERROR");
-					e.printStackTrace();
+					try {
+						neighbours.get((neighbourIndex + 1) % neighbours.size()).freeFirst(Instance.this);
+					} catch (RemoteException e) {
+						e.printStackTrace();
+					}
 				}
 			}
 			else
@@ -125,7 +142,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			if (fork2 == null)
 			{
 				try {
-					neighbours.get(neighbourIndex+1).lockFirst(Instance.this);
+					neighbours.get((neighbourIndex + 1) % neighbours.size()).lockFirst(Instance.this);
 				} catch (RemoteException e) {
 					return false;
 				}
@@ -236,8 +253,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 	}
 	
-	private Semaphore leftFork = new Semaphore(0);
-	private Semaphore rightFork = new Semaphore(0);
+	private Semaphore leftFork = new Semaphore(1, true);
+	private Semaphore rightFork = new Semaphore(1, true);
 		
 	private String controllerAddress;
 	
@@ -247,13 +264,15 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private List<Seat> seats = new ArrayList<Seat>();
 	
 	private boolean hasStarted = false;
+	
+	private final int uniqueID;
 		
 	private Instance(String controllerAddress) throws RemoteException, NotBoundException
 	{
 		this.controllerAddress = controllerAddress;
 		final Registry registry = LocateRegistry.getRegistry(controllerAddress);
 		controller = (InstanceToController) registry.lookup("controller");
-		controller.addInstance(this);
+		uniqueID = controller.addInstance(this);
 	}
 	
 	public static void main(String...args)
@@ -301,13 +320,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 	
 	public int getFreeSeats(){
-		//TODO
-		return 0;
+		int count  = 0;
+		for (int i = 0; i < seats.size(); i++)
+		{
+			// TODO availablePermits should work since it is just a snapshot, not sure.
+			seats.get(i).seatLock.availablePermits();
+			count++;
+		}
+		return count;
 	}
 	
 	public int getEatCount(){
-		//TODO
-		return 0;
+		return eatCount;
 	}
 
 	@Override
@@ -468,7 +492,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		try {
 			controller.log(this.toString(), System.currentTimeMillis(), "stopping instance");
 		} catch (RemoteException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		if (hasStarted)
@@ -483,7 +506,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		try {
 			controller.log(this.toString(), System.currentTimeMillis(), "has stopped");
 		} catch (RemoteException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -491,7 +513,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	@Override
 	public SnapshotEntry checkAvailable(final InstanceHandle neighbour, final int freeSeats, final int eatCount) throws RemoteException {
 		synchronized(neighbour){			
-			final SnapshotEntry entry = snapshots.get(neighbour);
+			SnapshotEntry entry = snapshots.get(neighbour);
+			if (entry == null)
+			{
+				entry = new SnapshotEntry();
+				snapshots.put(neighbour, entry);
+			}
 			entry.freeSeats = freeSeats;
 			entry.eatCount = eatCount;
 			entry.lastUpdated = System.currentTimeMillis();
@@ -503,17 +530,231 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		return result;
 	}
-
+	
+	/**
+	 * Gets a local seat.
+	 * 
+	 * Seat is NOT locked.
+	 * 
+	 * @return
+	 */
+	private int getSeatLocal(boolean force)
+	{
+		// TODO Maybe refactoring required.
+		// seat list is changed while iterated (last seat removed)
+		// so a array.. can occur.
+		// TODO NOTICE: that error handling might be required in every seats-list access.
+		while (true)
+		{
+			if (seats.size() == 0)
+				return NO_SEAT_AVAILABLE;
+			
+			try
+			{
+				List<Integer> indices = new ArrayList<Integer>();
+				for (int i = 0; i < seats.size(); i++)
+				{
+					if (seats.get(i).seatLock.availablePermits() == 1)
+					{
+						indices.add(i);
+					}
+				}
+				
+				if (indices.size() != 0)
+				{
+					return indices.get((int)(Math.random() * indices.size()));
+				}
+				if (force)
+					return(int)(Math.random() * seats.size());
+				
+				return NO_SEAT_FREE;
+			}
+			catch (ArrayIndexOutOfBoundsException e)
+			{
+				// No error handling required, just redo this operation.
+			}
+		}
+	}
+	
+	
+	public class HandleSeatPair
+	{
+		public HandleSeatPair(InstanceHandle handle, int seatIndex) { this.handle = handle; this.seatIndex = seatIndex; }
+		public InstanceHandle handle;
+		public int seatIndex;
+	}
+	
+	private HandleSeatPair getSeatOfRandomInstance()
+	{
+		// No local seat... so we have to lock a seat from another instance.
+		// TODO this iterates over all instances to get a seat, maybe remember instances with no seats?
+		// TODO when remembering: introduce a new method from controller "seatAdded" to reset the memory.
+		int index;
+		
+		
+		
+		for (int i = 0; i < neighbours.size(); i++)
+		{
+			if (neighbourIndex == i)
+				continue;
+			
+			try {
+				index = neighbours.get(i).getSeat(this);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+				index = NO_SEAT_AVAILABLE;
+			}
+			
+			if (index == NO_SEAT_AVAILABLE)
+			{
+				continue;
+			}
+			
+			return new HandleSeatPair(neighbours.get(i), index);
+		}
+		
+		// Here comes the part what to do if no instance has a seat (controller should have handled this)
+		controllerLog("getSeatForLocals", "no instance has a seat");
+		return new HandleSeatPair(null, NO_INSTANCE_HAS_A_SEAT);
+	}
+	
+	/**
+	 * Gets a seat and locks it.
+	 * @return index.
+	 */
+	public HandleSeatPair getSeatForLocals()
+	{
+		boolean force = neighbours.size() == 1; // Only force to get a seat on this table if no neighbour exists.
+		while (true)
+		{
+			
+			int index = getSeatLocal(force);
+			if (index < 0)
+			{
+				// No seat available/free.
+				List<InstanceHandle> handlesWithFreeSeats = new ArrayList<InstanceHandle>();
+				
+				for (Entry<InstanceHandle, SnapshotEntry> e : snapshots.entrySet())
+				{
+					if (e.getValue().freeSeats > 0)
+						handlesWithFreeSeats.add(e.getKey());
+					
+				}
+				
+				if (handlesWithFreeSeats.size() == 0)
+				{
+					if (this.seats.size() > 0)
+					{
+						// Don't use network since the network has no free seats.
+						force = true;
+						continue; // Restart with local seat.
+					}
+					else
+					{
+						return getSeatOfRandomInstance();
+					}
+				}
+				
+				InstanceHandle instance = handlesWithFreeSeats.get((int)(Math.random() * handlesWithFreeSeats.size()));
+				
+				try
+				{
+				index = instance.getSeat(this);
+				} catch (RemoteException e)
+				{
+					continue;
+				}
+				
+				if (index == NO_SEAT_AVAILABLE)
+				{
+					force = true;
+					continue; // TODO handle this case: instance with free seats has seat removed. -> snapshot update should be forced.
+				}
+				
+				return new HandleSeatPair(instance, index);
+			}
+			else
+			{
+				Seat seat;
+				try
+				{
+					seat = seats.get(index);
+					seat.lockSeat();
+					if (!seat.isSeatValid())
+					{
+						seat.releaseSeat();
+						continue;
+					}
+					seat.lockForks();
+					return new HandleSeatPair(this, index);
+				}
+				catch (ArrayIndexOutOfBoundsException e)
+				{
+					continue; // redo.
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Gets and locks a seat.
+	 * 
+	 * @return NO_SEAT_AVAILABLE if no seat is was found in this instance OR a valid index.
+	 */
 	@Override
 	public int getSeat(InstanceHandle instance) {
-		// TODO Auto-generated method stub
-		return 0;
+		if (seats.size() == 0)
+		{
+			return NO_SEAT_AVAILABLE;
+		}
+		
+		while (true)
+		{
+			int local = getSeatLocal(true);
+			
+			if (local == NO_SEAT_AVAILABLE)
+				return NO_SEAT_AVAILABLE;
+			
+			Seat seat;
+			
+			try
+			{
+				seat = seats.get(local);
+			}
+			catch (ArrayIndexOutOfBoundsException e)
+			{
+				// Seat was removed in the meantime, redo.
+				continue;
+			}
+			
+			seat.lockSeat();
+			if (!seat.isSeatValid())
+			{
+				seat.releaseSeat();
+				continue;
+			}
+			seat.lockForks();
+			return local;
+		}
 	}
 
+	public void releaseHandleSatPair(HandleSeatPair pair)
+	{
+		try {
+			pair.handle.freeSeat(pair.seatIndex);
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * Frees a seat.
+	 */
 	@Override
 	public void freeSeat(int index) {
-		// TODO Auto-generated method stub
-		
+		// Since the seat was locked it is guaranteed that the index still exists in the seats list.
+		seats.get(index).releaseForks();
+		seats.get(index).releaseSeat();
 	}
 
 	@Override
@@ -522,17 +763,18 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		prevSeatSemaphore.acquireUninterruptibly();
 		hasSeatsSemaphore.acquireUninterruptibly();
 		
-		if (!hadMoreThanOneSeatWhileLocked && this.equals(handle))
+		if (!hadMoreThanOneSeatWhileLocked && this.areInstancesEqual(handle))
 		{
 			// It's the only seat in the whole system.
+			controllerLog("lockFirst", "lock self");
 			rightFork.acquireUninterruptibly();
 		}
 		else
 		{
 			if (hasSeats)
 			{
-				//TODO error if neibours is not up to date / empty
-				neighbours.get(neighbourIndex+1).lockFirst(this);
+				//TODO error if neihbours is not up to date / empty
+				neighbours.get(neighbourIndex+1).lockFirst(handle);
 				hadSeatWhileLocked = true;
 			}
 			else
@@ -553,8 +795,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
 		prevSeatSemaphore.acquireUninterruptibly();
 		
-		if (!hadMoreThanOneSeatWhileLocked && this.equals(handle))
+		if (!hadMoreThanOneSeatWhileLocked && areInstancesEqual(neighbours.get(neighbourIndex), handle))
 		{
+			controllerLog("freeFirst", "free self");
 			// It was the only seat ever.
 			rightFork.release();
 		}
@@ -565,23 +808,12 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		else
 		{
 			//TODO error if neibours is not up to date / empty
-			neighbours.get(neighbourIndex+1).lockFirst(this);
+			neighbours.get((neighbourIndex+1) % neighbours.size()).freeFirst(this);
 		}
 		prevSeatSemaphore.release();
 	}
-
-	@Override
-	public boolean equals(Object o)
-	{
-		try {
-			return RemoteObject.toStub(this).equals(RemoteObject.toStub((Remote) o));
-		} catch (NoSuchObjectException e) {
-			e.printStackTrace();
-		}
-		
-		return false;
-	}
-
+	
+	
 	/**
 	 * Calculates the "score" of the instance.
 	 * The lower the number, the better.
@@ -623,9 +855,67 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 
 	@Override
 	public void updateNeighbours(List<InstanceHandle> neighbours) throws RemoteException {
+		controllerLog("updateNeighbours", "#" + neighbours.size());
 		this.neighbours.clear();
-		neighbours.addAll(neighbours);
-		neighbourIndex = neighbours.indexOf(this);
+		this.neighbours.addAll(neighbours);
+		for (int i = 0; i < neighbours.size(); i++)
+		{
+			if (areInstancesEqual(neighbours.get(i)))
+			{
+				
+				neighbourIndex = i;
+				break;
+			}
+		}
+	}
+
+	public void updateEaten(Object trigger, int eaten) {
+		if (eatCount < eaten || eatCountLastUpdater == trigger || eatCountLastUpdater == null)
+		{
+			eatCount = eaten;
+			eatCountLastUpdater = trigger;
+		}
+	}
+	
+	private Map<InstanceHandle, Integer> handles = new HashMap<InstanceHandle, Integer>();
+	
+	public boolean areInstancesEqual(InstanceHandle handle)
+	{
+		if (handles.get(handle) == null)
+		{
+			try {
+				handles.put(handle, handle.getUniqueID());
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		return uniqueID == handles.get(handle);
+	}
+
+	private boolean areInstancesEqual(InstanceHandle handle, InstanceHandle handle2) {
+		if (handles.get(handle) == null)
+		{
+			try {
+				handles.put(handle, handle.getUniqueID());
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		if (handles.get(handle2) == null)
+		{
+			try {
+				handles.put(handle2, handle2.getUniqueID());
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		return handles.get(handle) == handles.get(handle2);
+	}
+
+	@Override
+	public int getUniqueID() throws RemoteException {
+		return uniqueID;
 	}
 	
 }

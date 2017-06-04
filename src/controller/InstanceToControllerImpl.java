@@ -13,6 +13,11 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	
 	private final List<Float> instanceScores;
 	
+	/**
+	 * Counter for instances to determine which instance is which.
+	 */
+	private int uniqueID = 0;
+	
 	public InstanceToControllerImpl(final List<InstanceHandle> instances, final List<Float> instanceScores) throws RemoteException{
 		super();
 		this.instances = instances;
@@ -20,7 +25,9 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	}
 	
 	@Override
-	public synchronized void addInstance(InstanceHandle instance) throws RemoteException {
+	public synchronized int addInstance(InstanceHandle instance) throws RemoteException {
+		instances.add(instance);
+		instanceScores.add(0F);
 		instances.forEach(inst -> {
 			try {
 				inst.updateNeighbours(instances);
@@ -28,14 +35,15 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 				e.printStackTrace();
 			}
 		});
-		instances.add(instance);
-		instanceScores.add(0F);
+		
+		return uniqueID++;
 	}
 
 	@Override
 	public synchronized void removeInstance(InstanceHandle instance) throws RemoteException {
 		int index = instances.indexOf(instance);
 		instances.remove(index);
+		instanceScores.remove(index);
 		instances.forEach(inst -> {
 			try {
 				inst.updateNeighbours(instances);
@@ -43,7 +51,6 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 				e.printStackTrace();
 			}
 		});
-		instanceScores.remove(index);
 	}
 
 	@Override

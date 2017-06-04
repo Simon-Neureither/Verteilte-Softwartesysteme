@@ -23,4 +23,6 @@ public interface InstanceToInstance extends Remote, Serializable {
 	// Lockt die erste Gabel der Instanz die aufgerufen wurde.
 	void lockFirst(InstanceHandle instance) throws RemoteException;
 	void freeFirst(InstanceHandle instance) throws RemoteException;
+	
+	int getUniqueID() throws RemoteException;
 }

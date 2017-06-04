@@ -1,8 +1,8 @@
 package instance;
 
-import shared_interfaces.InstanceHandle;
+import java.io.Serializable;
 
-public class SnapshotEntry {
+public class SnapshotEntry  implements Serializable {
 
 	public long lastUpdated;
 	

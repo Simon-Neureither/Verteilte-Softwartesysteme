@@ -26,8 +26,7 @@ public class PhilosopherThread extends Thread {
 				for (int i = 0; i < dailyRoutine.size(); i++) {
 					switch (dailyRoutine.get(i)) {
 					case EAT:
-						// TODO
-						
+						data.eat();
 						break;
 					case MEDITATE:
 						sleep(data.meditateTime);
