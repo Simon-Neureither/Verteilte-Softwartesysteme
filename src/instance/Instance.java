@@ -260,6 +260,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private boolean hasStarted = false;
 	
 	private final int uniqueID;
+	
+	private boolean startLockOrder;
 		
 	private Instance(String controllerAddress) throws RemoteException, NotBoundException
 	{
@@ -269,8 +271,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		synchronized (this)
 		{
 			uniqueID = controller.addInstance(this);
+			startLockOrder = uniqueID % 2 == 0;
 		}
-		System.err.println("INSTANCE UNIQUEID: " + uniqueID);
+		System.err.println("INSTANCE UNIQUEID: " + uniqueID + " startLockOrder: " + startLockOrder);
 	}
 	
 	public static void main(String...args)
@@ -937,7 +940,28 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	@Override
 	public String toString2() throws RemoteException
 	{
-		return "Instance: s: " + seats.size() + " p:" + philosophers.size() + " uID:" + uniqueID + " leftFork: " + leftFork.availablePermits() + " rightFork: " + rightFork.availablePermits() + " eatCount: " + eatCount;
+		return "Instance: s: " + seats.size() + " p:" + philosophers.size() + " uID:" + uniqueID + " leftFork: " + leftFork.availablePermits() + " rightFork: " + rightFork.availablePermits() + " eatCount: " + eatCount + " startLockOrder: " + startLockOrder;
+	}
+
+	@Override
+	public synchronized boolean swapLockOrder(boolean lockOrder) throws RemoteException {
+		
+		if (seats.size() > 1)
+		{
+			controllerLog("swapLockOrder", "Seat count must be 0 or 1 but is: " + seats.size());
+			return false;
+		}
+		
+		controllerLog("swapLockOrder", "swapped lock order to: " + lockOrder);
+		
+		startLockOrder = lockOrder;
+		if (seats.size() == 1)
+		{
+			seats.get(0).lockSeat();
+			seats.get(0).setLockOrder(startLockOrder);
+			seats.get(0).releaseSeat();
+		}
+		return true;
 	}
 	
 }

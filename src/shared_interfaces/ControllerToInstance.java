@@ -16,6 +16,9 @@ public interface ControllerToInstance extends Remote, Serializable {
 	float addSeat() throws RemoteException;
 	float removeSeat() throws RemoteException;
 	
+	// Swap lock order - only if the seatCount <= 1.
+	boolean swapLockOrder(boolean lockOrder) throws RemoteException;
+	
 	void updateNeighbours(final List<InstanceHandle> neighbours) throws RemoteException;
 		
 	void start() throws RemoteException;

@@ -13,22 +13,31 @@ public class InstanceToControllerImpl extends UnicastRemoteObject implements Ins
 	
 	private final List<Float> instanceScores;
 	
+	private final List<Boolean> instanceLockOrder;
+	
+	private final List<Integer> instanceSeatCount;
+	
 	/**
 	 * Counter for instances to determine which instance is which.
 	 */
 	private int uniqueID = 0;
 	
-	public InstanceToControllerImpl(final List<InstanceHandle> instances, final List<Float> instanceScores) throws RemoteException{
+	public InstanceToControllerImpl(final List<InstanceHandle> instances, final List<Float> instanceScores, List<Boolean> instanceLockOrder, List<Integer> instanceSeatCount) throws RemoteException{
 		super();
 		this.instances = instances;
 		this.instanceScores = instanceScores;
+		this.instanceLockOrder = instanceLockOrder;
+		this.instanceSeatCount = instanceSeatCount;
 	}
 	
 	@Override
 	public synchronized int addInstance(InstanceHandle instance) throws RemoteException {
+		int newID = uniqueID++;
 		instances.add(instance);
 		instanceScores.add(0F);
-		return uniqueID++;
+		instanceLockOrder.add(newID % 2 == 0); // Must be same as in instance
+		instanceSeatCount.add(0);
+		return newID;
 	}
 
 	@Override

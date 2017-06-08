@@ -28,6 +28,11 @@ public class Controller {
 	private  static List<InstanceHandle> instances = new ArrayList<InstanceHandle>();
 	// Holds the "score" of an instance.
 	private static List<Float> instanceScores = new ArrayList<Float>();
+	
+	// Holds the lock order of the instances.
+	private static List<Boolean> instanceLockOrder = new ArrayList<Boolean>();
+	// Holds the seat coount of the instances.
+	private static List<Integer> instanceSeatCount = new ArrayList<Integer>();
 
 	static {
 		actions.put("addP", args -> Controller.addPhilosoph(false));
@@ -59,6 +64,8 @@ public class Controller {
 		actions.put("t4", in -> Controller.testCase4Instances());
 		
 		actions.put("pI", in -> Controller.printInstances());
+		
+		actions.put("tS",  in -> Controller.test_Swap());
 	}
 	
 	private static void printInstances()
@@ -70,6 +77,35 @@ public class Controller {
 			} catch (RemoteException e) {
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	private static void test_Swap()
+	{
+		try
+		{
+			
+			printInstances();
+			
+			addSeat(Arrays.asList(new String[]{"addSeat", "0"}));
+			// Swap required
+			addSeat(Arrays.asList(new String[]{"addSeat", "2"}));
+			
+			// Should print true, false, false (was true);
+			printInstances();
+			addSeat(Arrays.asList(new String[]{"addSeat", "1"}));
+			
+			printInstances();
+			
+			// Should swap
+			removeSeat(Arrays.asList(new String[]{"removeSeat", "0"}));
+			
+			printInstances();
+			
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
 		}
 	}
 	
@@ -184,7 +220,7 @@ public class Controller {
 
 		Registry registry;
 		try {
-			instanceToController = new InstanceToControllerImpl(instances, instanceScores);
+			instanceToController = new InstanceToControllerImpl(instances, instanceScores, instanceLockOrder, instanceSeatCount);
 			registry = LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
 			registry.bind("controller", (InstanceToController) instanceToController);
 		} catch (RemoteException e) {
@@ -238,16 +274,72 @@ public class Controller {
 			}
 
 			int index = 0;
-			for (int i = 1; i < instances.size(); i++) {
-				// Add a seat -> HIGHER is better since it "lowers" the score.
-				if (instanceScores.get(i) > instanceScores.get(index)) {
-					index = i;
+			
+			if (args.size() >= 2)
+			{
+				index = Integer.parseInt(args.get(1));
+			}
+			else
+			{
+				for (int i = 1; i < instances.size(); i++) {
+					// Add a seat -> HIGHER is better since it "lowers" the score.
+					if (instanceScores.get(i) > instanceScores.get(index)) {
+						index = i;
+					}
 				}
 			}
-
 			System.out.println("Adding seat to instance #" + index);
 			try {
+				
+				InstanceHandle handle = instances.get(index);
+				
+				boolean swapNecessary = false;
+				
+				if (instanceSeatCount.get(index) > 0)
+				{
+					// SeatCount >= 1 -> no swap necessary.
+				}
+				else
+				{
+					int seatCount = 0;
+					int lastIndexWithSeat = -1;
+					for (int i = 0; i < instanceSeatCount.size(); i++)
+					{
+						seatCount += instanceSeatCount.get(i);
+						
+						if (instanceSeatCount.get(i) > 0)
+						{
+							lastIndexWithSeat = i;
+						}
+						
+						if (seatCount > 2)
+							break;
+					}
+					
+					if (seatCount == 0)
+					{
+						// No swap necessary.
+					}
+					else if (seatCount == 1)
+					{
+						if (instanceLockOrder.get(lastIndexWithSeat) == instanceLockOrder.get(index))
+						{
+							// Same lock order -> swap.
+							swapNecessary = true;
+						}
+					}
+				}
+				
+				if (swapNecessary)
+				{
+					boolean oldLockOrder = instanceLockOrder.get(index);
+					instances.get(index).swapLockOrder(!oldLockOrder);
+					instanceLockOrder.set(index, !oldLockOrder);
+				}
+				
 				instanceScores.set(index, instances.get(index).addSeat());
+				instanceSeatCount.set(index, instanceSeatCount.get(index) + 1);
+				
 			} catch (RemoteException e) {
 				e.printStackTrace();
 			}
@@ -306,18 +398,39 @@ public class Controller {
 			int allAvailableSeats = 0;
 			int bestIndex = 0;
 			float bestScore = 0;
+			
+			boolean otherInstanceHasMoreThanOneSeat = false;
+			int instancesWithOneSeat = 0;
+			
 			for(int index = 0; index < instances.size(); index++){
-				try {
-					allAvailableSeats += instances.get(index).seatCount();
-				} catch (RemoteException e) {
-					e.printStackTrace();
-					return;
-				}
 				
+				allAvailableSeats += instanceSeatCount.get(index);
+								
 				if (bestScore > instanceScores.get(index))
 				{
 					bestScore = instanceScores.get(index);
 					bestIndex = index;
+				}
+			}
+			
+			if (args.size() > 1)
+			{
+				bestIndex = Integer.parseInt(args.get(1));
+			}
+			
+			for (int i = 0; i < instanceSeatCount.size(); i++)
+			{
+				if (i != bestIndex)
+				{
+					if (instanceSeatCount.get(i) > 1)
+					{
+						otherInstanceHasMoreThanOneSeat = true;
+						break;
+					}
+					else if (instanceSeatCount.get(i) == 1)
+					{
+						instancesWithOneSeat++;
+					}
 				}
 			}
 			
@@ -327,8 +440,76 @@ public class Controller {
 			}
 			
 			float score;
+			
+			
+			// Only instances with one seat -> we might have to swap (if we have 3 seats).
+			if (!otherInstanceHasMoreThanOneSeat && instanceSeatCount.get(bestIndex) <= 2 && instancesWithOneSeat > 0)
+			{
+				boolean instancesHaveSameLockOrder = true;
+				int firstInstance = -1;
+				int lastIndex = -1;
+				for (int i = 0; i < instanceSeatCount.size(); i++)
+				{
+					if (i != bestIndex)
+					{
+						if (instanceSeatCount.get(i) == 1)
+						{
+							if (firstInstance == -1)
+							{
+								firstInstance = i;
+							}
+							else if (instanceLockOrder.get(firstInstance) != instanceLockOrder.get(i))
+							{
+								instancesHaveSameLockOrder = false;
+								break;
+							}
+							else
+							{
+								lastIndex = i;
+							}
+						}
+					}
+					else
+					{
+						if (instanceSeatCount.get(bestIndex) == 2)
+						{
+							// After remove the instance will have 1 seat.
+							
+							if (firstInstance == -1)
+							{
+								firstInstance = i;
+							}
+							else if (instanceLockOrder.get(firstInstance) != instanceLockOrder.get(i))
+							{
+								instancesHaveSameLockOrder = false;
+								break;
+							}
+							else
+							{
+								lastIndex = i;
+							}
+						}
+					}
+				}
+				
+				if (firstInstance == bestIndex)
+					firstInstance = lastIndex;
+				
+				if (instancesHaveSameLockOrder && lastIndex != -1)
+				{
+					boolean lockOrder = instanceLockOrder.get(firstInstance);
+					try {
+						instances.get(firstInstance).swapLockOrder(!lockOrder);
+					} catch (RemoteException e) {
+						e.printStackTrace();
+					}
+					instanceLockOrder.set(firstInstance, !lockOrder);
+				}
+			
+			}
 			try {
 				score = instances.get(bestIndex).removeSeat();
+				instanceSeatCount.set(bestIndex, instanceSeatCount.get(bestIndex) - 1);
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				return;
@@ -336,7 +517,7 @@ public class Controller {
 			instanceScores.set(bestIndex, score);
 		}
 	}
-
+	
 	private static void debug_printSeats()
 	{
 		for (int i = 0; i < instances.size(); i++)
