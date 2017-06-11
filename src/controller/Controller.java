@@ -46,7 +46,7 @@ public class Controller {
 		actions.put("scores", in -> {
 			for (int i = 0; i < instances.size(); i++)
 			{
-				System.out.printf("%d: %f", i, instanceScores.get(i));
+				System.out.printf("I%d: %f P/S", i, instanceScores.get(i));
 			}
 		});
 		
@@ -257,7 +257,7 @@ public class Controller {
 					index = i;
 				}
 			}
-			System.out.println("Adding philosopher to instance #" + index);
+			System.out.printf("Adding%sphilosopher to instance #%d%n", isHungry ? " hungry ":" ", index);
 			try {
 				instanceScores.set(index, instances.get(index).addPhilosoph(isHungry));
 			} catch (RemoteException e) {
@@ -297,6 +297,7 @@ public class Controller {
 				
 				if (instanceSeatCount.get(index) > 0)
 				{
+					//TODO
 					// SeatCount >= 1 -> no swap necessary.
 				}
 				else
@@ -318,6 +319,7 @@ public class Controller {
 					
 					if (seatCount == 0)
 					{
+						//TODO
 						// No swap necessary.
 					}
 					else if (seatCount == 1)
@@ -356,7 +358,7 @@ public class Controller {
 			int index = 0;
 			for (int i = 1; i < instances.size(); i++)
 			{
-				if (instanceScores.get(i) < instanceScores.get(index))
+				if (instanceScores.get(i) > instanceScores.get(index))
 				{
 					index = i;
 				}

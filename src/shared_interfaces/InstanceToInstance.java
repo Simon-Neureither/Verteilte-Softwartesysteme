@@ -14,8 +14,8 @@ public interface InstanceToInstance extends Remote, Serializable {
 	SnapshotEntry checkAvailable(int instanceID, final int freeSeats, final int eatCount) throws RemoteException;
 	
 	// Lockt den sitzplatz (und beide gabeln).
-	int getSeat(int instanceID) throws RemoteException;
-	// -> getSeat(getAvailable(self));
+	int getSeat() throws RemoteException;
+	// -> getSeat();
 	
 	// Aufgerufen auf der jeweiligen Instanz.
 	void freeSeat(int index) throws RemoteException;

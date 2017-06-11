@@ -622,7 +622,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				continue;
 			
 			try {
-				index = neighbours.get(i).getSeat(uniqueID);
+				index = neighbours.get(i).getSeat();
 			} catch (RemoteException e) {
 				e.printStackTrace();
 				index = NO_SEAT_AVAILABLE;
@@ -682,7 +682,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				
 				try
 				{
-				index = instance.getSeat(uniqueID);
+				index = instance.getSeat();
 				} catch (RemoteException e)
 				{
 					continue;
@@ -725,7 +725,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 * @return NO_SEAT_AVAILABLE if no seat is was found in this instance OR a valid index.
 	 */
 	@Override
-	public int getSeat(int ID) {
+	public int getSeat() {
 		if (seats.size() == 0)
 		{
 			return NO_SEAT_AVAILABLE;
@@ -733,6 +733,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		while (true)
 		{
+			//TODO force
 			int local = getSeatLocal(true);
 			
 			if (local == NO_SEAT_AVAILABLE)
