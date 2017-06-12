@@ -185,7 +185,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		public void releaseForks()
 		{
 			if(neighbourIndex == -1){
-				//TODO actual error prevention
 				System.err.println("List of neighbours not up to date");
 				return;
 			}else{						
@@ -356,9 +355,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		synchronized (philosophers)
 		{
-			// TODO use second line (first is for testing).
-			philosophers.add(new PhilosopherData(hungry, 0, this));
-		//	philosophers.add(new PhilosopherData(hungry, eatCount, this));
+			philosophers.add(new PhilosopherData(hungry, eatCount, this));
 			
 			if (hasStarted)
 				philosophers.get(philosophers.size() - 1).start();
@@ -563,10 +560,8 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	 */
 	private int getSeatLocal(boolean force)
 	{
-		// TODO Maybe refactoring required.
 		// seat list is changed while iterated (last seat removed)
 		// so a array.. can occur.
-		// TODO NOTICE: that error handling might be required in every seats-list access.
 		while (true)
 		{
 			if (seats.size() == 0)
@@ -610,11 +605,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	private HandleSeatPair getSeatOfRandomInstance()
 	{
 		// No local seat... so we have to lock a seat from another instance.
-		// TODO this iterates over all instances to get a seat, maybe remember instances with no seats?
-		// TODO when remembering: introduce a new method from controller "seatAdded" to reset the memory.
 		int index;
-		
-		
 		
 		for (int i = 0; i < neighbours.size(); i++)
 		{
@@ -691,7 +682,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 				if (index == NO_SEAT_AVAILABLE)
 				{
 					force = true;
-					continue; // TODO handle this case: instance with free seats has seat removed. -> snapshot update should be forced.
+					continue;
 				}
 				
 				return new HandleSeatPair(instance, index);
@@ -733,7 +724,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		while (true)
 		{
-			//TODO force
 			int local = getSeatLocal(true);
 			
 			if (local == NO_SEAT_AVAILABLE)
@@ -814,7 +804,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
 	@Override
 	public void freeFirst(int ID) throws RemoteException {
-		// TODO cycle.
 		prevSeatSemaphore.acquireUninterruptibly();
 				
 		if (areInstancesEqual(ID))

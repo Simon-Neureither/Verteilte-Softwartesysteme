@@ -12,7 +12,6 @@ public class SnapshotUpdater extends Thread {
 	private static final long EXPIRE_TIME = 3000;
 
 	private final Instance caller;
-	private final InstanceToInstance callerStub;
 
 	private boolean stopped;
 
@@ -20,18 +19,6 @@ public class SnapshotUpdater extends Thread {
 
 	SnapshotUpdater(final Instance caller){
 		this.caller = caller;
-		
-		InstanceToInstance dummy;
-		
-		try {
-			dummy = (InstanceToInstance) caller.toStub(caller);
-		} catch (NoSuchObjectException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			dummy = null;
-		}
-		
-		callerStub = dummy;
 	}
 
 	@Override

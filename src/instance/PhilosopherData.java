@@ -57,7 +57,6 @@ public class PhilosopherData {
 
 	public int sleepTime = 10;
 	public int eatTime = 1;
-	// TODO hungry less meditate time?
 	public int meditateTime = 5;
 
 	public List<State> getDailyRoutine() {

@@ -295,12 +295,7 @@ public class Controller {
 				
 				boolean swapNecessary = false;
 				
-				if (instanceSeatCount.get(index) > 0)
-				{
-					//TODO
-					// SeatCount >= 1 -> no swap necessary.
-				}
-				else
+				if (instanceSeatCount.get(index) <= 0)
 				{
 					int seatCount = 0;
 					int lastIndexWithSeat = -1;
@@ -317,12 +312,7 @@ public class Controller {
 							break;
 					}
 					
-					if (seatCount == 0)
-					{
-						//TODO
-						// No swap necessary.
-					}
-					else if (seatCount == 1)
+					if (seatCount == 1)
 					{
 						if (instanceLockOrder.get(lastIndexWithSeat) == instanceLockOrder.get(index))
 						{

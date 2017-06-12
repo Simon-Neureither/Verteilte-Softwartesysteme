@@ -43,7 +43,6 @@ public class PhilosopherThread extends Thread {
 					}
 				}
 			} catch (InterruptedException e) {
-				// TODO
 				System.err.println("That was unexpected.");
 				e.printStackTrace();
 			}
