@@ -32,7 +32,7 @@ public class SnapshotUpdater extends Thread {
 				caller.getSnapshots().put(caller.getUniqueIDOfHandle(inst), inst.checkAvailable(
 						caller.getUniqueIDLocal(), 
 						caller.getFreeSeats(), 
-						caller.getEatCount()));
+						caller.getEatCountLocal()));
 			} catch (RemoteException e) {
 				e.printStackTrace();
 			}
@@ -55,7 +55,7 @@ public class SnapshotUpdater extends Thread {
 			
 			final long currentTime = System.currentTimeMillis();
 			final int freeSeats = caller.getFreeSeats();
-			final int eatCount = caller.getEatCount();
+			final int eatCount = caller.getAmountOfPhilosophers() == 0 ? - 1 : caller.getEatCountLocal();
 
 			caller.getSnapshots().entrySet().parallelStream()
 			.filter(entry -> currentTime - entry.getValue().lastUpdated > EXPIRE_TIME)
@@ -64,7 +64,11 @@ public class SnapshotUpdater extends Thread {
 				try {
 					SnapshotEntry snapshotEntry = caller.getInstanceByID(entry.getKey()).checkAvailable(caller.getUniqueIDLocal(), freeSeats, eatCount);
 					entry.setValue(snapshotEntry);
-					caller.updateEaten(entry.getKey(), snapshotEntry.eatCount);
+					
+					if (snapshotEntry.eatCount != -1)
+						caller.updateEatenGlobal(entry.getKey(), snapshotEntry.eatCount);
+					else
+						caller.unupdateEatenGlobal(entry.getKey());
 				} catch (RemoteException e) {
 					e.printStackTrace();
 				}

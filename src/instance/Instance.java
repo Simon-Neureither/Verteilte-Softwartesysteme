@@ -58,9 +58,11 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	
 	
 	/** Eat count. */
-	private int eatCount = 0;
+	private int eatCountLocal = 0;
+	private int eatCountGlobal = 0;
+	private Object eatCountLastLocalUpdater = null;
+	private Object eatCountLastGlobalUpdater = null;
 	/** Last philosopher or Snapshot that updated it. */
-	private Object eatCountLastUpdater = null;
 	
 	/**
 	 * Class to represent a seat, it contains two forks.
@@ -351,8 +353,23 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 	}
 	
-	public int getEatCount(){
-		return eatCount;
+	public int getEatCountLocal(){
+		return eatCountLocal;
+	}
+	
+	public int getEatCountGlobal()
+	{
+		long time = System.currentTimeMillis();
+		
+		long deltaT = lastGlobal[2] - lastGlobal[1];
+		if (deltaT == 0) deltaT = 1;
+		long realCount = eatCountGlobal + ((eatCountGlobal - lastGlobal[0]) / deltaT) * (time - lastGlobal[2]) + 300;
+		System.err.println(eatCountLocal + " " + realCount);
+		return eatCountLastGlobalUpdater == null ? eatCountLocal : (int)realCount;
+	}
+	
+	public int getAmountOfPhilosophers(){
+		return philosophers.size();
 	}
 
 	@Override
@@ -361,7 +378,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		synchronized (philosophers)
 		{
-			philosophers.add(new PhilosopherData(hungry, eatCount, this));
+			philosophers.add(new PhilosopherData(hungry, eatCountLocal, this));
 			
 			if (hasStarted)
 				philosophers.get(philosophers.size() - 1).start();
@@ -387,6 +404,9 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 					PhilosopherData data = philosophers.remove(i);
 					controllerLog("removePhilosoph", "stopping philosopher to remove...");
 					data.stop();
+					
+					unupdateEatenLocal(data);
+					
 					controllerLog("removePhilosoph", "stopped philosopher to remove");
 					removed = true;
 					break;
@@ -538,7 +558,6 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		InstanceToInstance instance = getInstanceByID(neighbour);
 		
 		synchronized(instance){
-			
 			SnapshotEntry entry = snapshots.get(neighbour);
 			if (entry == null)
 			{
@@ -549,10 +568,19 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 			entry.eatCount = eatCount;
 			entry.lastUpdated = System.currentTimeMillis();
 		}
+		if (eatCount != -1)
+		{
+			updateEatenGlobal(neighbour, eatCount);
+		}
+		else
+		{
+			unupdateEatenGlobal(neighbour);
+		}
 		
 		final SnapshotEntry result = new SnapshotEntry();
 		result.freeSeats = getFreeSeats();
-		result.eatCount = getEatCount();
+		result.eatCount = philosophers.size() > 0 ? getEatCountLocal() : -1;
+		result.lastUpdated = System.currentTimeMillis();
 		
 		return result;
 	}
@@ -843,7 +871,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	{
 		if (amountSeats == 0)
 		{
-			return (float) (amountPhilosophers == 0 ? 1.0 : 1.0 / 0);
+			return amountPhilosophers;
 		}
 		return ((float)amountPhilosophers) / amountSeats;
 	}
@@ -888,12 +916,40 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		}
 	}
 
-	public void updateEaten(Object trigger, int eaten) {
-		if (eatCount > eaten || eatCountLastUpdater == trigger || eatCountLastUpdater == null)
+	public void updateEatenLocal(Object trigger, int eaten) {
+		if (eatCountLastLocalUpdater == trigger || eatCountLastLocalUpdater == null)
 		{
-			eatCount = eaten;
-			eatCountLastUpdater = trigger;
+		//	System.out.println(trigger.getClass() + " " + trigger + " " + eaten);
+			eatCountLocal = eaten;
+			eatCountLastLocalUpdater = trigger;
 		}
+	}
+	
+	private long lastGlobal[] = new long[3];
+
+	public void updateEatenGlobal(Object trigger, int eaten)
+	{
+		if (eatCountLastGlobalUpdater == trigger || eatCountLastGlobalUpdater == null)
+		{
+			System.out.println(trigger.getClass() + " " + trigger + " " + eaten);
+			lastGlobal[0] = eatCountGlobal;
+			lastGlobal[1] = lastGlobal[2];
+			lastGlobal[2] = System.currentTimeMillis();
+			eatCountGlobal = eaten;
+			eatCountLastGlobalUpdater = trigger;
+		}
+	}
+	
+	public void unupdateEatenGlobal(Object trigger)
+	{
+		if (eatCountLastGlobalUpdater == trigger)
+			eatCountLastGlobalUpdater = null;
+	}
+	
+	public void unupdateEatenLocal(Object trigger)
+	{
+		if (eatCountLastLocalUpdater == trigger)
+			eatCountLastLocalUpdater = null;
 	}
 	
 	private Map<InstanceHandle, Integer> handles = new HashMap<InstanceHandle, Integer>();
@@ -936,7 +992,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	@Override
 	public String toString2() throws RemoteException
 	{
-		return "Instance: s: " + seats.size() + " p:" + philosophers.size() + " uID:" + uniqueID + " leftFork: " + leftFork.availablePermits() + " rightFork: " + rightFork.availablePermits() + " eatCount: " + eatCount + " startLockOrder: " + startLockOrder;
+		return "Instance: s: " + seats.size() + " p:" + philosophers.size() + " uID:" + uniqueID + " leftFork: " + leftFork.availablePermits() + " rightFork: " + rightFork.availablePermits() + " eatCount: " + eatCountLocal + "/" + eatCountGlobal + " startLockOrder: " + startLockOrder;
 	}
 
 	@Override

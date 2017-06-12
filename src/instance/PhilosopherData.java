@@ -109,7 +109,7 @@ public class PhilosopherData {
 	}
 
 	public void eat() {
-		if (getEaten() > instance.getEatCount() + 10)
+		if (getEaten() > instance.getEatCountGlobal() + 100)
 		{
 			debug_eatDenied++;
 			return;
@@ -125,7 +125,7 @@ public class PhilosopherData {
 				return;
 			}
 			eaten++;
-			instance.updateEaten(this, eaten);
+			instance.updateEatenLocal(this, eaten+eatenOffset);
 			instance.releaseHandleSatPair(pair);
 		}
 	}

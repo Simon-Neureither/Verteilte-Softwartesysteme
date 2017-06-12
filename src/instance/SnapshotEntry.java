@@ -9,5 +9,5 @@ public class SnapshotEntry  implements Serializable {
 	public int freeSeats;
 	
 	public int eatCount;
-	
+		
 }
