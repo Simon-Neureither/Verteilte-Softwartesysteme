@@ -336,13 +336,19 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	}
 	
 	public int getFreeSeats(){
-		int count  = 0;
-		for (int i = 0; i < seats.size(); i++)
-		{
-			seats.get(i).seatLock.availablePermits();
-			count++;
+		while(true){
+			try{
+				int count  = 0;
+				for (int i = 0; i < seats.size(); i++)
+				{
+					seats.get(i).seatLock.availablePermits();
+					count++;
+				}
+				return count;				
+			}catch(ArrayIndexOutOfBoundsException e){
+				continue;
+			}
 		}
-		return count;
 	}
 	
 	public int getEatCount(){
@@ -402,7 +408,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		if (seats.size() == 0)
 		{
 			// No seat...
-			seat.setLockOrder(uniqueID == 0); // Only one instance may start with this flag set.
+			seat.setLockOrder(startLockOrder); // Only one instance may start with this flag set.
 			seat.setFork1(leftFork);
 		}
 		else
