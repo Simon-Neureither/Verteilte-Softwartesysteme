@@ -109,7 +109,7 @@ public class PhilosopherData {
 	}
 
 	public void eat() {
-		if (getEaten() > instance.getEatCountGlobal() + 100)
+		if (getEaten() > instance.getEatCountGlobal())
 		{
 			debug_eatDenied++;
 			return;

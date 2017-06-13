@@ -362,22 +362,13 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	{
 		long time = System.currentTimeMillis();
 		
-		if (lastGlobal[1] == 0 || lastGlobal[2] == 0) return Integer.MAX_VALUE;
+		if (lastGlobal[1] == 0 || lastGlobal[2] == 0) return Integer.MAX_VALUE - 1000;
 		
 		long deltaT = lastGlobal[2] - lastGlobal[1];
 		if (deltaT == 0) deltaT = 1;
-		long realCount = (long) (eatCountGlobal + 2 * ((eatCountGlobal - lastGlobal[0]) / ((double)deltaT)) * (time - lastGlobal[2]));// + 300;
+		long realCount = (long) (eatCountGlobal + ((eatCountGlobal - lastGlobal[0]) / ((double)deltaT)) * (time - lastGlobal[2])) + 300;
 		
-		double x = eatCountGlobal - lastGlobal[0];
-		System.err.print("X: "  + x);
-		x /= deltaT;
-		System.err.print("  " + x);
-		x *= (time - lastGlobal[2]);
-		System.err.println("  " + x);
-
-		
-		System.err.println(deltaT + " " + (eatCountGlobal - lastGlobal[0]) + " " +  ( (eatCountGlobal + 2 * ((eatCountGlobal - lastGlobal[0]) / ((double)deltaT)) * (time - lastGlobal[2]))));
-		return eatCountLastGlobalUpdater == null ? eatCountLocal : (int)realCount;
+		return eatCountLastGlobalUpdater == null ? eatCountLocal + 100 : (int)realCount;
 	}
 	
 	public int getAmountOfPhilosophers(){
@@ -390,7 +381,7 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 		
 		synchronized (philosophers)
 		{
-			philosophers.add(new PhilosopherData(hungry, eatCountLocal, this));
+			philosophers.add(new PhilosopherData(hungry, eatCountGlobal, this));
 			
 			if (hasStarted)
 				philosophers.get(philosophers.size() - 1).start();
@@ -931,24 +922,23 @@ public class Instance extends UnicastRemoteObject implements InstanceHandle {
 	public void updateEatenLocal(Object trigger, int eaten) {
 		if (eaten < eatCountLocal || eatCountLastLocalUpdater == trigger || eatCountLastLocalUpdater == null)
 		{
-		//	System.out.println(trigger.getClass() + " " + trigger + " " + eaten);
 			eatCountLocal = eaten;
 			eatCountLastLocalUpdater = trigger;
 		}
 	}
 	
 	private long lastGlobal[] = new long[3];
-
+	
 	public void updateEatenGlobal(Object trigger, int eaten)
 	{
-		if (eaten < eatCountLocal || eatCountLastGlobalUpdater == trigger || eatCountLastGlobalUpdater == null)
+		if (eaten < eatCountGlobal || eatCountLastGlobalUpdater == trigger || eatCountLastGlobalUpdater == null)
 		{
-			System.out.println(trigger.getClass() + " " + trigger + " " + eaten);
 			lastGlobal[0] = eatCountGlobal;
 			lastGlobal[1] = lastGlobal[2];
 			lastGlobal[2] = System.currentTimeMillis();
 			eatCountGlobal = eaten;
 			eatCountLastGlobalUpdater = trigger;
+			
 		}
 	}
 	
